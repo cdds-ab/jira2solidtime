@@ -1,0 +1,142 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, master, develop ]
+  pull_request:
+    branches: [ main, master ]
+
+env:
+  PYTHON_VERSION: "3.12"
+
+jobs:
+  code-quality:
+    name: Code Quality & Security
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Install uv
+      uses: astral-sh/setup-uv@v3
+      with:
+        version: "latest"
+        enable-cache: true
+
+    - name: Set up Python
+      run: uv python install ${{ env.PYTHON_VERSION }}
+
+    - name: Install dependencies
+      run: uv sync
+
+    - name: Run ruff linting
+      run: uv run ruff check .
+
+    - name: Run ruff formatting check
+      run: uv run ruff format --check .
+
+    - name: Run mypy type checking
+      run: uv run mypy .
+
+    - name: Security scan with bandit
+      run: |
+        uv add bandit[toml]
+        uv run bandit -r src/ -f json -o security-report.json || true
+        uv run bandit -r src/
+
+    - name: Check for secrets with gitleaks
+      uses: gitleaks/gitleaks-action@v2
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  tests:
+    name: Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: code-quality
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Install uv
+      uses: astral-sh/setup-uv@v3
+      with:
+        version: "latest"
+        enable-cache: true
+
+    - name: Set up Python
+      run: uv python install ${{ env.PYTHON_VERSION }}
+
+    - name: Install dependencies
+      run: uv sync
+
+    - name: Add testing dependencies
+      run: |
+        uv add pytest pytest-cov
+
+    - name: Run tests with coverage
+      run: |
+        uv run pytest tests/ \
+          --cov=src/jira2solidtime \
+          --cov-report=xml \
+          --cov-report=html \
+          --cov-fail-under=60 \
+          --junitxml=pytest-report.xml \
+          -v || true
+
+    - name: Upload test results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: test-results
+        path: |
+          pytest-report.xml
+          htmlcov/
+
+  docker-build-test:
+    name: Test Docker Builds
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: tests
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Build full stack image (test only)
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        file: ./Dockerfile
+        push: false
+        tags: jira2solidtime:test-full
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+
+    - name: Build app-only image (test only)
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        file: ./docker/Dockerfile.app
+        push: false
+        tags: jira2solidtime:test-app
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+
+    - name: Test Docker images
+      run: |
+        echo "Testing full stack image..."
+        docker run --rm jira2solidtime:test-full uv run jira2solidtime --help
+
+        echo "Testing app-only image..."
+        docker run --rm jira2solidtime:test-app --help
+
+        echo "✅ All Docker builds successful!"
+

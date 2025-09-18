@@ -1,0 +1,130 @@
+# Docker Compose for jira2solidtime production deployment
+
+services:
+  jira2solidtime:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: jira2solidtime
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+      - ./config:/app/config
+      - metrics_vol:/metrics
+    env_file: .env
+    environment:
+      - METRICS_DIR=/metrics
+    restart: unless-stopped
+    networks:
+      - monitoring
+    labels:
+      # Ofelia cron job configuration
+      ofelia.enabled: "true"
+      ofelia.job-exec.sync.schedule: "0 */1 * * * *"
+      ofelia.job-exec.sync.command: "uv run jira2solidtime sync"
+      ofelia.job-exec.health.schedule: "0 */1 * * * *"
+      ofelia.job-exec.health.command: "uv run jira2solidtime health-check"
+
+  metrics-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: jira2solidtime-metrics
+    command: ["sh", "-c", "cd /app && uv run python -c 'from src.jira2solidtime.monitoring.metrics_server import MetricsServer; server = MetricsServer(); server.start(); import time; time.sleep(999999)'"]
+    volumes:
+      - metrics_vol:/metrics
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
+    networks:
+      - monitoring
+
+  scheduler:
+    image: mcuadros/ofelia:latest
+    container_name: jira2solidtime-scheduler
+    depends_on:
+      - jira2solidtime
+    command: daemon --docker
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    restart: unless-stopped
+    networks:
+      - monitoring
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: jira2solidtime-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/prometheus/alert_rules.yml:/etc/prometheus/alert_rules.yml:ro
+      - metrics_vol:/metrics:ro
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=30d'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--web.enable-lifecycle'
+    restart: unless-stopped
+    networks:
+      - monitoring
+    depends_on:
+      - alertmanager
+
+  alertmanager:
+    image: prom/alertmanager:latest
+    container_name: jira2solidtime-alertmanager
+    ports:
+      - "9093:9093"
+    volumes:
+      - ./monitoring/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - ./monitoring/alertmanager/templates:/etc/alertmanager/templates:ro
+      - alertmanager_data:/alertmanager
+    command:
+      - '--config.file=/etc/alertmanager/alertmanager.yml'
+      - '--storage.path=/alertmanager'
+      - '--web.external-url=http://localhost:9093'
+    restart: unless-stopped
+    networks:
+      - monitoring
+    environment:
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
+      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID:-}
+      - TEAMS_WEBHOOK_URL=${TEAMS_WEBHOOK_URL:-}
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: jira2solidtime-grafana
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_INSTALL_PLUGINS=grafana-piechart-panel
+    restart: unless-stopped
+    networks:
+      - monitoring
+    depends_on:
+      - prometheus
+
+volumes:
+  metrics_vol:
+    driver: local
+  prometheus_data:
+    driver: local
+  grafana_data:
+    driver: local
+  alertmanager_data:
+    driver: local
+
+networks:
+  monitoring:
+    driver: bridge

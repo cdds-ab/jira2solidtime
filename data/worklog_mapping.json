@@ -1,0 +1,38 @@
+{
+  "version": "1.0",
+  "last_updated": "2025-09-18T20:39:05.737184",
+  "mappings": {
+    "610": {
+      "solidtime_entry_id": "151c799d-66cf-4dd5-9949-0ca798f29da7",
+      "issue_key": "AS-1",
+      "tempo_updated_at": "2025-09-18T20:27:19Z",
+      "solidtime_updated_at": "2025-09-18T20:38:07.988920Z",
+      "needs_update": false,
+      "created_at": "2025-09-18T19:37:51.441802"
+    },
+    "611": {
+      "solidtime_entry_id": "9705e8dd-534e-4f48-aefb-c10044977be3",
+      "issue_key": "AS-1",
+      "tempo_updated_at": "2025-09-16T19:17:24Z",
+      "solidtime_updated_at": "2025-09-18T20:38:07.989607Z",
+      "needs_update": false,
+      "created_at": "2025-09-18T19:37:51.441843"
+    },
+    "613": {
+      "solidtime_entry_id": "23b73b5e-70bf-4108-9651-7ee0285719c5",
+      "issue_key": "AS-1",
+      "tempo_updated_at": "2025-09-18T20:26:33Z",
+      "solidtime_updated_at": "2025-09-18T20:39:05.736728Z",
+      "needs_update": false,
+      "created_at": "2025-09-18T19:37:51.441857"
+    },
+    "615": {
+      "solidtime_entry_id": "bcf56cf3-ff44-4f04-8ba7-5594e4789e84",
+      "issue_key": "AS-1",
+      "tempo_updated_at": "2025-09-18T20:32:10Z",
+      "solidtime_updated_at": "2025-09-18T20:38:07.994989Z",
+      "needs_update": false,
+      "created_at": "2025-09-18T20:33:04.045592"
+    }
+  }
+}

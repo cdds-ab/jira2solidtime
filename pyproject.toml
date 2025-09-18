@@ -1,0 +1,80 @@
+[project]
+name = "jira2solidtime"
+dynamic = ["version"]
+description = "Synchronize time tracking data from Jira Tempo to Solidtime"
+authors = [
+    {name = "Fred Thiele", email = "fred.thiele@cdds.se"},
+]
+dependencies = [
+    "requests>=2.31.0",
+    "python-dotenv>=1.0.0",
+    "pyyaml>=6.0.1",
+    "pandas>=2.0.0",
+    "click>=8.1.0",
+    "tenacity>=9.1.2",
+    "rich>=13.0.0",
+    "structlog>=23.0.0",
+    "prometheus-client>=0.19.0",
+]
+requires-python = ">=3.10"
+
+readme = "README.md"
+license = {text = "MIT"}
+keywords = ["jira", "tempo", "solidtime", "time-tracking", "sync"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+
+[project.scripts]
+jira2solidtime = "jira2solidtime.main:main"
+j2s = "jira2solidtime.main:main"
+
+[project.urls]
+Homepage = "https://github.com/cdds-ab/jira2solidtime"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/jira2solidtime"]
+Repository = "https://github.com/cdds-ab/jira2solidtime.git"
+Issues = "https://github.com/cdds-ab/jira2solidtime/issues"
+
+[dependency-groups]
+dev = [
+    "ruff>=0.1.0",
+    "black>=23.0.0",
+    "mypy>=1.0.0",
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+    "pre-commit>=3.0.0",
+    "types-requests>=2.32.4.20250913",
+    "types-pyyaml>=6.0.12.20250915",
+    "pandas-stubs>=2.3.2.250827",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.version]
+path = "src/jira2solidtime/__version__.py"
+
+[tool.mypy]
+python_version = "3.10"
+packages = ["src/jira2solidtime"]
+strict = false
+warn_return_any = false
+warn_unused_configs = true
+disallow_untyped_defs = false
+ignore_missing_imports = false
+
+# Disable warnings for JSON API responses
+disable_error_code = ["no-any-return"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]

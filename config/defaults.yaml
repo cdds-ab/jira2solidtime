@@ -1,0 +1,41 @@
+# Default configuration for jira2solidtime
+# These values are used as fallbacks when not specified in environment or config files
+
+sync:
+  schedule: "0 8 * * *"  # Daily at 8 AM
+  retry_attempts: 3
+  backup_retention_days: 30
+  days_back: 7
+  dry_run: false
+
+scheduling:
+  mode: "internal"  # internal, external, disabled
+  max_concurrent_jobs: 1
+  job_timeout_minutes: 60
+
+logging:
+  level: "INFO"
+  format: "json"  # json, text
+  structured: true
+
+api:
+  timeout_seconds: 30
+  retry_backoff_multiplier: 1
+  retry_min_wait: 2
+  retry_max_wait: 10
+
+health:
+  check_timeout: 5
+  critical_services:
+    - "tempo_api"
+    - "solidtime_api"
+    - "database"
+
+security:
+  secrets_rotation_days: 90
+  backup_encryption: true
+
+performance:
+  batch_size: 100
+  max_workers: 5
+  cache_ttl_seconds: 300
