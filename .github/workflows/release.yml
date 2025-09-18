@@ -1,0 +1,158 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: "latest"
+
+      - name: Set up Python 3.12
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Run quality checks and tests
+        run: |
+          uv run ruff check --fix .
+          uv run ruff format --check .
+          uv run mypy .
+          uv run pytest -v
+
+  docker-build:
+    name: Build and Push Docker Images
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_PAT }}
+
+      - name: Extract metadata for full stack
+        id: meta-full
+        uses: docker/metadata-action@v5
+        with:
+          images: cddsab/jira2solidtime
+          tags: |
+            type=ref,event=tag
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=beta,enable=${{ contains(github.ref, 'beta') }}
+            type=raw,value=rc,enable=${{ contains(github.ref, 'rc') }}
+
+      - name: Extract metadata for app-only
+        id: meta-app
+        uses: docker/metadata-action@v5
+        with:
+          images: cddsab/jira2solidtime
+          tags: |
+            type=ref,event=tag,suffix=-app
+            type=raw,value=latest-app,enable={{is_default_branch}}
+            type=raw,value=beta-app,enable=${{ contains(github.ref, 'beta') }}
+            type=raw,value=rc-app,enable=${{ contains(github.ref, 'rc') }}
+
+      - name: Build and push full stack image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: ${{ steps.meta-full.outputs.tags }}
+          labels: ${{ steps.meta-full.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build and push app-only image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./docker/Dockerfile.app
+          push: true
+          tags: ${{ steps.meta-app.outputs.tags }}
+          labels: ${{ steps.meta-app.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  github-release:
+    name: Create GitHub Release
+    needs: [test, docker-build]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Generate release notes
+        id: release-notes
+        run: |
+          # Extract version from tag
+          VERSION=${GITHUB_REF#refs/tags/v}
+
+          # Generate release notes
+          cat > release_notes.md << EOF
+          ## 🚀 Release v${VERSION}
+
+          ### Installation Options
+
+          **Docker (Application Only):**
+          \`\`\`bash
+          docker run cddsab/jira2solidtime:${VERSION}-app --help
+          \`\`\`
+
+          **Docker Compose (Full Stack with Monitoring):**
+          \`\`\`bash
+          curl -O https://github.com/${{ github.repository }}/releases/download/v${VERSION}/docker-compose.yml
+          docker-compose up -d
+          \`\`\`
+
+          ### What's Changed
+
+          See [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/v${VERSION}/CHANGELOG.md) for detailed changes.
+
+          ### Artifacts
+
+          - 🐳 **Docker Images**:
+            - Full stack: \`cddsab/jira2solidtime:${VERSION}\`
+            - App only: \`cddsab/jira2solidtime:${VERSION}-app\`
+          - 📋 **Compose Files**: Available as release assets
+          EOF
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          body_path: release_notes.md
+          draft: false
+          prerelease: ${{ contains(github.ref, 'beta') || contains(github.ref, 'rc') || contains(github.ref, 'alpha') }}
+          files: |
+            docker-compose.yml
+            compose/docker-compose.app.yml
+            compose/docker-compose.dev.yml
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

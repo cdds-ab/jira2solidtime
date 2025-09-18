@@ -1,0 +1,47 @@
+groups:
+  - name: jira2solidtime_alerts
+    rules:
+      - alert: SyncFailed
+        expr: jira2solidtime_sync_success == 0
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: "jira2solidtime sync has failed"
+          description: "The last sync operation failed and has been failing for more than 10 minutes."
+
+      - alert: SlowSyncOperation
+        expr: jira2solidtime_sync_duration_seconds > 15
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "jira2solidtime sync operation slower than usual"
+          description: "Sync operation is taking {{ $value }} seconds, normal is 3-5 seconds."
+
+      - alert: LongRunningSyncOperation
+        expr: jira2solidtime_sync_duration_seconds > 30
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "jira2solidtime sync operation taking too long"
+          description: "Sync operation is taking {{ $value }} seconds, which indicates a serious problem."
+
+      - alert: APIServiceDown
+        expr: jira2solidtime_tempo_api_healthy == 0 or jira2solidtime_solidtime_api_healthy == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "External API service is down"
+          description: "One or more external API services (Tempo/Solidtime) are not responding."
+
+      - alert: NoRecentSync
+        expr: time() - jira2solidtime_last_sync_timestamp > 600
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "No recent sync operation"
+          description: "No sync operation has been performed in the last 10 minutes."
