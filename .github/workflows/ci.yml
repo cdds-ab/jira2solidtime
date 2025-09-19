@@ -43,6 +43,19 @@ jobs:
     - name: Security scan with bandit
       run: uv run bandit -r src/ -f json -o security-report.json
 
+    - name: Install hadolint for Docker security
+      run: |
+        wget -O hadolint https://github.com/hadolint/hadolint/releases/latest/download/hadolint-Linux-x86_64
+        chmod +x hadolint
+        sudo mv hadolint /usr/local/bin/
+
+    - name: Docker security scan with hadolint
+      run: |
+        echo "Scanning Dockerfiles for security issues..."
+        hadolint Dockerfile --ignore DL3008 --ignore DL3009
+        hadolint docker/Dockerfile.app --ignore DL3008 --ignore DL3009
+        echo "✅ Docker security scan completed"
+
     - name: Check for common secrets patterns
       run: |
         echo "Checking for common secret patterns..."
@@ -54,9 +67,8 @@ jobs:
            --exclude-dir=.mypy_cache \
            --exclude-dir=__pycache__ \
            --exclude="*.md" \
-           --exclude="*.yml" \
-           --exclude="*.yaml" \
-           --exclude="CACHEDIR.TAG" || \
+           --exclude="CACHEDIR.TAG" \
+           --exclude=".secrets.baseline" || \
            grep -r -E "AKIA[0-9A-Z]{16}" . \
            --exclude-dir=.git \
            --exclude-dir=.venv \
@@ -165,4 +177,3 @@ jobs:
         docker run --rm jira2solidtime:test-app --help
 
         echo "✅ All Docker builds successful!"
-
