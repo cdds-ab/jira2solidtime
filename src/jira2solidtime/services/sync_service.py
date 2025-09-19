@@ -1,5 +1,6 @@
 """Core synchronization service."""
 
+import logging
 from datetime import datetime
 from typing import Dict, Any, Optional, List
 
@@ -14,6 +15,8 @@ from ..cli.progress import ModernCLI
 from ..utils.logging import StructuredLogger
 from ..monitoring.metrics_exporter import MetricsExporter
 from ..monitoring.health_check import HealthChecker
+
+logger = logging.getLogger(__name__)
 
 
 class SyncService:
@@ -307,7 +310,9 @@ class SyncService:
                     worklog, project_mapping, {}, member_id
                 )
                 time_entries.append(time_entry)
-            except Exception:
+            except (KeyError, ValueError, TypeError) as e:
+                # Skip malformed worklog entries but log the issue
+                logger.warning(f"Skipping malformed worklog entry: {e}")
                 continue
         return time_entries
 
@@ -521,7 +526,9 @@ class SyncService:
                 end_time = datetime.fromisoformat(end_str.replace("Z", "+00:00"))
                 duration_seconds = (end_time - start_time).total_seconds()
                 duration_hours = duration_seconds / 3600.0
-            except Exception:
+            except (ValueError, TypeError) as e:
+                # Invalid datetime format, use fallback duration
+                logger.warning(f"Invalid datetime format in worklog: {e}")
                 pass
 
         return duration_hours
