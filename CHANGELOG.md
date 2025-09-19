@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0](https://github.com/cdds-ab/jira2solidtime/compare/v0.2.0...v0.3.0) (2025-09-19)
+
+
+### Features
+
+* add webhook integration support ([604c0e0](https://github.com/cdds-ab/jira2solidtime/commit/604c0e0db26ab4f9882ca1e613c4bf9bf050e2fa))
+* test clean semantic versioning ([e1d8947](https://github.com/cdds-ab/jira2solidtime/commit/e1d8947d26eff7dcd5caf0a8dc62e2e170ae53df))
+
 ## [Unreleased]
 
 ## [0.1.0-beta] - 2025-09-19
