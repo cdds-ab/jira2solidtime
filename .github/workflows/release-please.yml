@@ -16,6 +16,7 @@ jobs:
         id: release
         with:
           release-type: python
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       # Optional: Only run release workflow if a release was created
       - name: Trigger release workflow
