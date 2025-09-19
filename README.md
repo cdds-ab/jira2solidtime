@@ -1,6 +1,10 @@
 # jira2solidtime
 
-**v0.1.0-beta** - Synchronize time tracking data from Jira Tempo to Solidtime with a modern CLI interface and production-ready monitoring.
+[![GitHub Release](https://img.shields.io/github/v/release/cdds-ab/jira2solidtime?include_prereleases&style=flat-square)](https://github.com/cdds-ab/jira2solidtime/releases)
+[![Docker Hub](https://img.shields.io/docker/v/cddsab/jira2solidtime?style=flat-square&logo=docker)](https://hub.docker.com/r/cddsab/jira2solidtime)
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg?style=flat-square)](https://opensource.org/licenses/Apache-2.0)
+
+Synchronize time tracking data from Jira Tempo to Solidtime with a modern CLI interface and production-ready monitoring.
 
 ## Features
 
@@ -20,8 +24,9 @@
 
 **Quick Start - Application Only:**
 ```bash
-# Download minimal compose file
-curl -O https://raw.githubusercontent.com/cdds-ab/jira2solidtime/v0.1.0-beta/compose/docker-compose.app.yml
+# Download minimal compose file for latest release
+LATEST_VERSION=$(curl -s https://api.github.com/repos/cdds-ab/jira2solidtime/releases/latest | grep tag_name | cut -d '"' -f 4)
+curl -O https://github.com/cdds-ab/jira2solidtime/releases/download/${LATEST_VERSION}/docker-compose.app.yml
 
 # Configure environment
 cp .env.template .env
@@ -33,8 +38,9 @@ docker compose -f docker-compose.app.yml up -d
 
 **Full Stack with Monitoring:**
 ```bash
-# Download full compose file
-curl -O https://raw.githubusercontent.com/cdds-ab/jira2solidtime/v0.1.0-beta/docker-compose.yml
+# Download full compose file for latest release
+LATEST_VERSION=$(curl -s https://api.github.com/repos/cdds-ab/jira2solidtime/releases/latest | grep tag_name | cut -d '"' -f 4)
+curl -O https://github.com/cdds-ab/jira2solidtime/releases/download/${LATEST_VERSION}/docker-compose.yml
 
 # Configure environment
 cp .env.template .env
@@ -42,6 +48,15 @@ cp .env.template .env
 
 # Start full stack
 docker compose up -d
+```
+
+**Alternative: Use latest Docker images directly:**
+```bash
+# App-only with latest release
+docker run --rm cddsab/jira2solidtime:latest-app --help
+
+# Or specify exact version from badge above
+docker run --rm cddsab/jira2solidtime:v0.1.0-beta.2-app --help
 ```
 
 ### Development Installation
