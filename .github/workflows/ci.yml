@@ -46,10 +46,29 @@ jobs:
     - name: Check for common secrets patterns
       run: |
         echo "Checking for common secret patterns..."
-        # Check for common secret patterns
-        if grep -r -E "(password|secret|key|token)\s*=\s*['\"][^'\"]{8,}['\"]" . --exclude-dir=.git --exclude-dir=.venv --exclude="*.md" --exclude="*.yml" --exclude="*.yaml" || \
-           grep -r -E "AKIA[0-9A-Z]{16}" . --exclude-dir=.git --exclude-dir=.venv || \
-           grep -r -E "[0-9a-f]{32}" . --exclude-dir=.git --exclude-dir=.venv --exclude="*.lock" --exclude="*.json"; then
+        # Check for common secret patterns, excluding cache and common files
+        if grep -r -E "(password|secret|key|token)\s*=\s*['\"][^'\"]{8,}['\"]" . \
+           --exclude-dir=.git \
+           --exclude-dir=.venv \
+           --exclude-dir=.ruff_cache \
+           --exclude-dir=.mypy_cache \
+           --exclude-dir=__pycache__ \
+           --exclude="*.md" \
+           --exclude="*.yml" \
+           --exclude="*.yaml" \
+           --exclude="CACHEDIR.TAG" || \
+           grep -r -E "AKIA[0-9A-Z]{16}" . \
+           --exclude-dir=.git \
+           --exclude-dir=.venv \
+           --exclude-dir=.ruff_cache \
+           --exclude-dir=.mypy_cache \
+           --exclude-dir=__pycache__ || \
+           grep -r -E "sk-[a-zA-Z0-9]{48}" . \
+           --exclude-dir=.git \
+           --exclude-dir=.venv \
+           --exclude-dir=.ruff_cache \
+           --exclude-dir=.mypy_cache \
+           --exclude-dir=__pycache__; then
           echo "⚠️  Potential secrets found! Please review."
           exit 1
         else
