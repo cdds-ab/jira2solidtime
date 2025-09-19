@@ -17,11 +17,6 @@ updates:
       include: "scope"
     # Gruppiere zusammengehörige Updates
     groups:
-      security-updates:
-        patterns:
-          - "*"
-        update-types:
-          - "security"
       dev-dependencies:
         patterns:
           - "ruff"
@@ -29,8 +24,23 @@ updates:
           - "pytest*"
           - "bandit*"
           - "pre-commit"
+          - "types-*"
+          - "*-stubs"
         update-types:
           - "minor"
+          - "patch"
+      production-dependencies:
+        patterns:
+          - "requests"
+          - "python-dotenv"
+          - "pyyaml"
+          - "pandas"
+          - "click"
+          - "tenacity"
+          - "rich"
+          - "structlog"
+          - "prometheus-client"
+        update-types:
           - "patch"
 
   # Docker dependencies
