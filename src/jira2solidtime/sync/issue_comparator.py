@@ -317,9 +317,9 @@ class IssueComparator:
                     tempo_id, tempo_updated_at
                 ):
                     # Update the mapping timestamp and mark for update
-                    self.worklog_mapping.mappings[tempo_id][
-                        "tempo_updated_at"
-                    ] = tempo_updated_at
+                    self.worklog_mapping.mappings[tempo_id]["tempo_updated_at"] = (
+                        tempo_updated_at
+                    )
                     self.worklog_mapping.mark_for_update(tempo_id)
                     stats["marked_for_update"] += 1
                     logger.info(
@@ -664,12 +664,12 @@ class IssueComparator:
         if tempo_id and issue_key:
             if tempo_id in self.worklog_mapping.mappings:
                 # Update existing mapping
-                self.worklog_mapping.mappings[tempo_id][
-                    "solidtime_entry_id"
-                ] = solidtime_entry_id
-                self.worklog_mapping.mappings[tempo_id][
-                    "solidtime_updated_at"
-                ] = solidtime_updated_at
+                self.worklog_mapping.mappings[tempo_id]["solidtime_entry_id"] = (
+                    solidtime_entry_id
+                )
+                self.worklog_mapping.mappings[tempo_id]["solidtime_updated_at"] = (
+                    solidtime_updated_at
+                )
                 self.worklog_mapping.clear_update_flag(tempo_id)
             else:
                 # Create new mapping

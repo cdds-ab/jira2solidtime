@@ -420,9 +420,9 @@ class SyncService:
             issue_key = tempo_worklog.get("issue", {}).get("key", "")
             tempo_description = tempo_worklog.get("description", "")
             tempo_worklog_id = tempo_worklog.get("tempoWorklogId", "")
-            time_entry_data[
-                "description"
-            ] = f"{issue_key}: {tempo_description} [JiraSync:{tempo_worklog_id}]"
+            time_entry_data["description"] = (
+                f"{issue_key}: {tempo_description} [JiraSync:{tempo_worklog_id}]"
+            )
 
             # Override with existing project/task IDs to avoid mapping conflicts
             if existing_project_id:
@@ -467,9 +467,9 @@ class SyncService:
         # Update mapping with latest timestamps
         current_tempo_worklog = worklogs_to_update[index]
         tempo_id = str(current_tempo_worklog.get("tempoWorklogId", ""))
-        self.comparator.worklog_mapping.mappings[tempo_id][
-            "tempo_updated_at"
-        ] = current_tempo_worklog.get("updatedAt", "")
+        self.comparator.worklog_mapping.mappings[tempo_id]["tempo_updated_at"] = (
+            current_tempo_worklog.get("updatedAt", "")
+        )
         self.comparator.worklog_mapping.mappings[tempo_id]["solidtime_updated_at"] = (
             datetime.now().isoformat() + "Z"
         )
