@@ -53,11 +53,13 @@ class HealthChecker:
                 "message": solidtime_msg,
             },
             "overall": {
-                "status": "healthy"
-                if tempo_healthy and solidtime_healthy
-                else "unhealthy",
-                "message": "All services healthy"
-                if tempo_healthy and solidtime_healthy
-                else "One or more services unhealthy",
+                "status": (
+                    "healthy" if tempo_healthy and solidtime_healthy else "unhealthy"
+                ),
+                "message": (
+                    "All services healthy"
+                    if tempo_healthy and solidtime_healthy
+                    else "One or more services unhealthy"
+                ),
             },
         }

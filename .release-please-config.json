@@ -14,9 +14,8 @@
         {"type": "test", "section": "🧪 Tests"},
         {"type": "ci", "section": "🤖 CI/CD"}
       ],
-      "release-as": "0.2.0",
-      "prerelease": false,
-      "prerelease-type": null
+      "prerelease": true,
+      "prerelease-type": "beta"
     }
   }
 }

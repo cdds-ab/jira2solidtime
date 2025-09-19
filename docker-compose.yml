@@ -2,12 +2,14 @@
 
 services:
   jira2solidtime:
-    image: cddsab/jira2solidtime:0.1.0-beta
+    image: cddsab/jira2solidtime:0.2.0
     # Alternative: Build from source
     # build:
     #   context: .
     #   dockerfile: Dockerfile
     container_name: jira2solidtime
+    ports:
+      - "8080:8080"  # Admin Dashboard
     volumes:
       - ./data:/app/data
       - ./logs:/app/logs
@@ -20,31 +22,13 @@ services:
     networks:
       - monitoring
     labels:
-      # Ofelia cron job configuration
+      # Ofelia cron job configuration - gets schedule from config API
       ofelia.enabled: "true"
       ofelia.job-exec.sync.schedule: "${SYNC_SCHEDULE:-0 */10 6-22 * * *}"
       ofelia.job-exec.sync.command: "uv run jira2solidtime sync"
       ofelia.job-exec.health.schedule: "${HEALTH_CHECK_SCHEDULE:-0 */1 * * * *}"
       ofelia.job-exec.health.command: "uv run jira2solidtime health-check"
 
-  metrics-server:
-    image: cddsab/jira2solidtime:0.1.0-beta
-    # Alternative: Build from source
-    # build:
-    #   context: .
-    #   dockerfile: Dockerfile
-    container_name: jira2solidtime-metrics
-    command:
-      - "sh"
-      - "-c"
-      - "cd /app && uv run python -c 'from src.jira2solidtime.monitoring.metrics_server import MetricsServer; server = MetricsServer(); server.start(); import time; time.sleep(999999)'"
-    volumes:
-      - metrics_vol:/metrics
-    ports:
-      - "8000:8000"
-    restart: unless-stopped
-    networks:
-      - monitoring
 
   scheduler:
     image: mcuadros/ofelia:latest
@@ -68,7 +52,6 @@ services:
       - ./monitoring/prometheus/alert_rules.yml:/etc/prometheus/alert_rules.yml:ro
       - metrics_vol:/metrics:ro
       - prometheus_data:/prometheus
-      - ./scripts/generate-alert-rules.sh:/generate-alert-rules.sh:ro
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
       - '--storage.tsdb.path=/prometheus'
@@ -80,11 +63,8 @@ services:
     networks:
       - monitoring
     depends_on:
+      - jira2solidtime
       - alertmanager
-    environment:
-      - SYNC_ALERT_THRESHOLD=${SYNC_ALERT_THRESHOLD:-900}
-      - SYNC_START_HOUR=${SYNC_START_HOUR:-6}
-      - SYNC_END_HOUR=${SYNC_END_HOUR:-22}
 
   alertmanager:
     image: prom/alertmanager:latest

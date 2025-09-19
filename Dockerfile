@@ -32,5 +32,5 @@ ENV METRICS_DIR=/metrics
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD uv run jira2solidtime --help > /dev/null || exit 1
 
-# Default command - keep container running
-CMD ["tail", "-f", "/dev/null"]
+# Default command - run service mode
+CMD ["uv", "run", "jira2solidtime", "serve", "--host", "0.0.0.0", "--port", "8080"]
