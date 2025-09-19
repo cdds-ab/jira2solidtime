@@ -1,6 +1,6 @@
 # jira2solidtime
 
-Synchronize time tracking data from Jira Tempo to Solidtime with a modern CLI interface.
+**v0.1.0-beta** - Synchronize time tracking data from Jira Tempo to Solidtime with a modern CLI interface and production-ready monitoring.
 
 ## Features
 
@@ -15,6 +15,36 @@ Synchronize time tracking data from Jira Tempo to Solidtime with a modern CLI in
 - 🔐 **Security-first** approach with no hardcoded credentials
 
 ## Installation
+
+### Docker (Recommended)
+
+**Quick Start - Application Only:**
+```bash
+# Download minimal compose file
+curl -O https://raw.githubusercontent.com/cdds-ab/jira2solidtime/v0.1.0-beta/compose/docker-compose.app.yml
+
+# Configure environment
+cp .env.template .env
+# Edit .env with your API credentials
+
+# Start application
+docker compose -f docker-compose.app.yml up -d
+```
+
+**Full Stack with Monitoring:**
+```bash
+# Download full compose file
+curl -O https://raw.githubusercontent.com/cdds-ab/jira2solidtime/v0.1.0-beta/docker-compose.yml
+
+# Configure environment
+cp .env.template .env
+# Edit .env with your API credentials and notification settings
+
+# Start full stack
+docker compose up -d
+```
+
+### Development Installation
 
 ```bash
 uv sync
@@ -49,6 +79,17 @@ uv sync
 ## Usage
 
 ### Sync worklogs
+
+**Using Docker:**
+```bash
+# Sync current month (dry run)
+docker run --rm -v ./config:/app/config cddsab/jira2solidtime:0.1.0-beta-app sync --dry-run
+
+# Sync specific date range
+docker run --rm -v ./config:/app/config cddsab/jira2solidtime:0.1.0-beta-app sync --from 2024-01-01 --to 2024-01-31
+```
+
+**Using uv (development):**
 ```bash
 # Sync current month (dry run)
 uv run jira2solidtime sync --dry-run

@@ -2,9 +2,11 @@
 
 services:
   jira2solidtime:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: cddsab/jira2solidtime:0.1.0-beta
+    # Alternative: Build from source
+    # build:
+    #   context: .
+    #   dockerfile: Dockerfile
     container_name: jira2solidtime
     volumes:
       - ./data:/app/data
@@ -26,9 +28,11 @@ services:
       ofelia.job-exec.health.command: "uv run jira2solidtime health-check"
 
   metrics-server:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: cddsab/jira2solidtime:0.1.0-beta
+    # Alternative: Build from source
+    # build:
+    #   context: .
+    #   dockerfile: Dockerfile
     container_name: jira2solidtime-metrics
     command: ["sh", "-c", "cd /app && uv run python -c 'from src.jira2solidtime.monitoring.metrics_server import MetricsServer; server = MetricsServer(); server.start(); import time; time.sleep(999999)'"]
     volumes:

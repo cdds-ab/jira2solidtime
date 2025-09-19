@@ -3,9 +3,11 @@
 
 services:
   jira2solidtime:
-    build:
-      context: ..
-      dockerfile: docker/Dockerfile.app
+    image: cddsab/jira2solidtime:0.1.0-beta-app
+    # Alternative: Build from source
+    # build:
+    #   context: ..
+    #   dockerfile: docker/Dockerfile.app
     container_name: jira2solidtime-app
     volumes:
       - ./data:/app/data
