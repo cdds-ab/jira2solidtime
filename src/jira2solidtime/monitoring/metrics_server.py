@@ -72,14 +72,17 @@ jira2solidtime_last_sync_timestamp {current_time}
 class MetricsServer:
     """HTTP server for Prometheus metrics."""
 
-    def __init__(self, port: int = 8000):
+    def __init__(self, port: int = 8000, host: str = "127.0.0.1"):
         self.port = port
+        self.host = host
         self.server = None
         self.thread = None
 
     def start(self):
         """Start the metrics server in a background thread."""
-        self.server = HTTPServer(("0.0.0.0", self.port), MetricsHandler)
+        # Use 0.0.0.0 in containerized environments for external access
+        bind_host = "0.0.0.0" if self.host == "0.0.0.0" else self.host  # nosec B104
+        self.server = HTTPServer((bind_host, self.port), MetricsHandler)  # nosec B104
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
         self.thread.start()
         print(f"Metrics server started on port {self.port}")
