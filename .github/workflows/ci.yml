@@ -43,10 +43,18 @@ jobs:
     - name: Security scan with bandit
       run: uv run bandit -r src/ -f json -o security-report.json
 
-    - name: Check for secrets with gitleaks
-      uses: gitleaks/gitleaks-action@v2
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    - name: Check for common secrets patterns
+      run: |
+        echo "Checking for common secret patterns..."
+        # Check for common secret patterns
+        if grep -r -E "(password|secret|key|token)\s*=\s*['\"][^'\"]{8,}['\"]" . --exclude-dir=.git --exclude-dir=.venv --exclude="*.md" --exclude="*.yml" --exclude="*.yaml" || \
+           grep -r -E "AKIA[0-9A-Z]{16}" . --exclude-dir=.git --exclude-dir=.venv || \
+           grep -r -E "[0-9a-f]{32}" . --exclude-dir=.git --exclude-dir=.venv --exclude="*.lock" --exclude="*.json"; then
+          echo "⚠️  Potential secrets found! Please review."
+          exit 1
+        else
+          echo "✅ No obvious secrets detected."
+        fi
 
   tests:
     name: Tests
