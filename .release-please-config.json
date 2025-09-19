@@ -1,0 +1,21 @@
+{
+  "packages": {
+    ".": {
+      "release-type": "python",
+      "package-name": "jira2solidtime",
+      "version-file": "src/jira2solidtime/__version__.py",
+      "changelog-sections": [
+        {"type": "feat", "section": "🚀 Features"},
+        {"type": "fix", "section": "🐛 Bug Fixes"},
+        {"type": "docs", "section": "📖 Documentation"},
+        {"type": "chore", "section": "🔧 Maintenance"},
+        {"type": "refactor", "section": "♻️ Refactoring"},
+        {"type": "perf", "section": "⚡ Performance"},
+        {"type": "test", "section": "🧪 Tests"},
+        {"type": "ci", "section": "🤖 CI/CD"}
+      ],
+      "release-as": "0.2.0",
+      "prerelease": false
+    }
+  }
+}

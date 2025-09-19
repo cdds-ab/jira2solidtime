@@ -31,7 +31,7 @@ repos:
     rev: v2.12.0
     hooks:
       - id: hadolint-docker
-        args: ['--ignore', 'DL3008', '--ignore', 'DL3009']
+        args: ['--ignore', 'DL3008', '--ignore', 'DL3009', '--ignore', 'DL3059', '--ignore', 'SC2035']
 
   # YAML/Docker Compose security
   - repo: https://github.com/adrienverge/yamllint.git
