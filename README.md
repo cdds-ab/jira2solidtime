@@ -2,7 +2,10 @@
 
 [![GitHub Release](https://img.shields.io/github/v/release/cdds-ab/jira2solidtime?include_prereleases&style=flat-square)](https://github.com/cdds-ab/jira2solidtime/releases)
 [![Docker Hub](https://img.shields.io/docker/v/cddsab/jira2solidtime?style=flat-square&logo=docker)](https://hub.docker.com/r/cddsab/jira2solidtime)
+[![CI/CD](https://img.shields.io/github/actions/workflow/status/cdds-ab/jira2solidtime/ci.yml?branch=master&style=flat-square&logo=github)](https://github.com/cdds-ab/jira2solidtime/actions)
+[![Docker Pulls](https://img.shields.io/docker/pulls/cddsab/jira2solidtime?style=flat-square&logo=docker)](https://hub.docker.com/r/cddsab/jira2solidtime)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg?style=flat-square)](https://opensource.org/licenses/Apache-2.0)
+[![Python](https://img.shields.io/badge/Python-3.10%2B-blue?style=flat-square&logo=python)](https://www.python.org/)
 
 Synchronize time tracking data from Jira Tempo to Solidtime with a modern CLI interface and production-ready monitoring.
 
