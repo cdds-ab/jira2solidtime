@@ -140,6 +140,7 @@ jobs:
         context: .
         file: ./Dockerfile
         push: false
+        load: true  # Load image into local Docker daemon
         tags: jira2solidtime:test-full
         cache-from: type=gha
         cache-to: type=gha,mode=max
@@ -150,6 +151,7 @@ jobs:
         context: .
         file: ./docker/Dockerfile.app
         push: false
+        load: true  # Load image into local Docker daemon
         tags: jira2solidtime:test-app
         cache-from: type=gha
         cache-to: type=gha,mode=max
