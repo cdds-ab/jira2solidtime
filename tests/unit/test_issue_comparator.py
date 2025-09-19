@@ -1,4 +1,5 @@
 """Basic tests for IssueComparator to ensure functionality."""
+
 from jira2solidtime.sync.issue_comparator import IssueComparator
 
 
