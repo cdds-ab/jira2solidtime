@@ -15,7 +15,8 @@
         {"type": "ci", "section": "🤖 CI/CD"}
       ],
       "release-as": "0.2.0",
-      "prerelease": false
+      "prerelease": false,
+      "prerelease-type": null
     }
   }
 }
