@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0-beta.3](https://github.com/cdds-ab/jira2solidtime/compare/v0.1.0-beta.3...v0.2.0-beta.3) (2025-09-19)
+
+
+### Features
+
+* add comprehensive Docker and YAML security scanning ([2c1727e](https://github.com/cdds-ab/jira2solidtime/commit/2c1727e0a2c0c0fbc48bfdfbbb3a500df4a9fc5e))
+* add comprehensive status badges to README ([0cd2ed0](https://github.com/cdds-ab/jira2solidtime/commit/0cd2ed0449b34be9b8687209ea96b0b7fd887bb4))
+* simulate feature to establish clean release pattern ([c19ab41](https://github.com/cdds-ab/jira2solidtime/commit/c19ab41becef8556b22e61b0fb12bb5eb5f1f483))
+
+
+### Bug Fixes
+
+* add explicit GitHub token for release-please ([2f029cd](https://github.com/cdds-ab/jira2solidtime/commit/2f029cdd24ddb6e6e8dab61ded80cf7156a9aace))
+* disable prerelease mode for clean 0.2.0 release ([15ed11d](https://github.com/cdds-ab/jira2solidtime/commit/15ed11d0c493cc8452cad6902d313026009de2bb))
+* hadolint Docker security scan warnings ([0b39a48](https://github.com/cdds-ab/jira2solidtime/commit/0b39a4840d83d0e98708d4eca84e53082c927735))
+* update to non-deprecated googleapis/release-please-action ([f43b556](https://github.com/cdds-ab/jira2solidtime/commit/f43b55673a1eab88c522e80f4f67c29d87ee88f2))
+
 ## [Unreleased]
 
 ## [0.1.0-beta] - 2025-09-19
