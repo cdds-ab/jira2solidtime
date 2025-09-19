@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0-beta.3](https://github.com/cdds-ab/jira2solidtime/compare/v0.1.0-beta.3...v0.2.0-beta.3) (2025-09-19)
+
+
+### Features
+
+* complete production-ready monitoring and security setup ([e3c4fc8](https://github.com/cdds-ab/jira2solidtime/commit/e3c4fc8e55480de46ee2f8ed1a7f9412cb240a54))
+
+
+### Bug Fixes
+
+* add explicit GitHub token for release-please ([89e2ae7](https://github.com/cdds-ab/jira2solidtime/commit/89e2ae77026eb1267f1b73b66ce4cba5d5c4d662))
+* update to non-deprecated googleapis/release-please-action ([b2370e0](https://github.com/cdds-ab/jira2solidtime/commit/b2370e01de6f02d3d170af0034833a97ba2b40b1))
+
 ## [Unreleased]
 
 ## [0.1.0-beta] - 2025-09-19
