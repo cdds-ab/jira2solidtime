@@ -1,4 +1,5 @@
 """Basic tests for SyncService to ensure core functionality."""
+
 from unittest.mock import Mock
 from jira2solidtime.services.sync_service import SyncService
 
