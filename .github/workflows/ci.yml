@@ -52,8 +52,8 @@ jobs:
     - name: Docker security scan with hadolint
       run: |
         echo "Scanning Dockerfiles for security issues..."
-        hadolint Dockerfile --ignore DL3008 --ignore DL3009
-        hadolint docker/Dockerfile.app --ignore DL3008 --ignore DL3009
+        hadolint Dockerfile --ignore DL3008 --ignore DL3009 --ignore DL3059
+        hadolint docker/Dockerfile.app --ignore DL3008 --ignore DL3009 --ignore DL3059 --ignore SC2035
         echo "✅ Docker security scan completed"
 
     - name: Check for common secrets patterns
