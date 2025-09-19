@@ -38,13 +38,10 @@ groups:
           description: "One or more external API services (Tempo/Solidtime) are not responding."
 
       - alert: NoRecentSync
-        expr: time() - jira2solidtime_last_sync_timestamp > 900 and hour() >= 6 and hour() <= 22
+        expr: time() - jira2solidtime_last_sync_timestamp > ${SYNC_ALERT_THRESHOLD} and hour() >= ${SYNC_START_HOUR} and hour() <= ${SYNC_END_HOUR}
         for: 5m
         labels:
           severity: warning
         annotations:
           summary: "No recent sync operation during business hours"
-          description: >-
-            No sync operation has been performed in the last 900 seconds.
-            Sync runs during configured business hours (6:00 - 22:00),
-            so this indicates a problem with the sync process.
+          description: "No sync operation has been performed in the last ${SYNC_ALERT_THRESHOLD} seconds. Sync runs during configured business hours (${SYNC_START_HOUR}:00 - ${SYNC_END_HOUR}:00), so this indicates a problem with the sync process."
