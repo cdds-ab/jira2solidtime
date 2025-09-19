@@ -41,10 +41,7 @@ jobs:
       run: uv run mypy .
 
     - name: Security scan with bandit
-      run: |
-        uv add bandit[toml]
-        uv run bandit -r src/ -f json -o security-report.json || true
-        uv run bandit -r src/
+      run: uv run bandit -r src/ -f json -o security-report.json
 
     - name: Check for secrets with gitleaks
       uses: gitleaks/gitleaks-action@v2
