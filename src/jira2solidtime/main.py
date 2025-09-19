@@ -10,7 +10,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Dict, Any, Optional, Tuple, Union
 
-from .config import load_config
+from .config import load_config, get_config_manager
 from .factories.client_factory import ClientFactory
 from .services.sync_service import SyncService
 from .domain.models import SyncRequest
@@ -20,6 +20,7 @@ from .utils.date_parser import parse_date_range
 from .utils.logging import StructuredLogger, setup_console_logging
 from .cli.progress import ModernCLI
 from .monitoring.metrics_exporter import MetricsExporter
+from .web.service import WebService
 from . import __version__
 
 
@@ -345,6 +346,287 @@ def health_check():
 def version():
     """Show version information."""
     click.echo(f"jira2solidtime {__version__}")
+
+
+@cli.group()
+def config():
+    """Configuration management commands."""
+    pass
+
+
+@config.command("init")
+@click.option(
+    "--interactive", "-i", is_flag=True, help="Interactive configuration setup"
+)
+def config_init(interactive):
+    """Initialize configuration database."""
+    config_manager = get_config_manager()
+
+    if interactive:
+        click.echo("🔧 jira2solidtime Configuration Setup")
+        click.echo("=====================================")
+
+        # Jira configuration
+        click.echo("\n📋 Jira Configuration:")
+        jira_base_url = click.prompt(
+            "Jira Base URL", default=config_manager.get_config("jira.base_url", "")
+        )
+        jira_user_email = click.prompt(
+            "Jira User Email", default=config_manager.get_config("jira.user_email", "")
+        )
+        jira_api_token = click.prompt("Jira API Token", hide_input=True, default="")
+
+        # Tempo configuration
+        click.echo("\n⏱️  Tempo Configuration:")
+        tempo_api_token = click.prompt("Tempo API Token", hide_input=True, default="")
+
+        # Solidtime configuration
+        click.echo("\n🎯 Solidtime Configuration:")
+        solidtime_base_url = click.prompt(
+            "Solidtime Base URL",
+            default=config_manager.get_config("solidtime.base_url", ""),
+        )
+        solidtime_api_token = click.prompt(
+            "Solidtime API Token", hide_input=True, default=""
+        )
+        solidtime_org_id = click.prompt(
+            "Solidtime Organization ID",
+            default=config_manager.get_config("solidtime.organization_id", ""),
+        )
+
+        # Sync configuration
+        click.echo("\n🔄 Sync Configuration:")
+        sync_schedule = click.prompt(
+            "Sync Schedule (cron format)",
+            default=config_manager.get_config("sync.schedule", "0 */10 6-22 * * *"),
+        )
+        dry_run = click.confirm(
+            "Enable dry-run mode by default?",
+            default=config_manager.get_config("sync.dry_run", True),
+        )
+
+        # Save configuration
+        if jira_base_url:
+            config_manager.set_config("jira.base_url", jira_base_url, "jira")
+        if jira_user_email:
+            config_manager.set_config("jira.user_email", jira_user_email, "jira")
+        if jira_api_token:
+            config_manager.set_config("jira.api_token", jira_api_token, "jira")
+        if tempo_api_token:
+            config_manager.set_config("jira.tempo_api_token", tempo_api_token, "jira")
+        if solidtime_base_url:
+            config_manager.set_config(
+                "solidtime.base_url", solidtime_base_url, "solidtime"
+            )
+        if solidtime_api_token:
+            config_manager.set_config(
+                "solidtime.api_token", solidtime_api_token, "solidtime"
+            )
+        if solidtime_org_id:
+            config_manager.set_config(
+                "solidtime.organization_id", solidtime_org_id, "solidtime"
+            )
+
+        config_manager.set_config("sync.schedule", sync_schedule, "sync")
+        config_manager.set_config("sync.dry_run", dry_run, "sync")
+
+        click.echo("\n✅ Configuration saved to database")
+    else:
+        click.echo("✅ Configuration database initialized")
+        click.echo(
+            "Run 'jira2solidtime config init --interactive' for interactive setup"
+        )
+
+
+@config.command("get")
+@click.argument("key")
+def config_get(key):
+    """Get configuration value."""
+    config_manager = get_config_manager()
+    value = config_manager.get_config(key)
+
+    if value is None:
+        click.echo(f"Configuration key '{key}' not found", err=True)
+        exit(1)
+
+    if isinstance(value, str) and any(
+        secret in key.lower() for secret in ["token", "password", "secret"]
+    ):
+        click.echo("*" * len(str(value)))  # Hide sensitive values
+    else:
+        click.echo(value)
+
+
+@config.command("set")
+@click.argument("key")
+@click.argument("value")
+@click.option("--category", help="Configuration category")
+def config_set(key, value, category):
+    """Set configuration value."""
+    config_manager = get_config_manager()
+
+    # Auto-convert boolean strings
+    if value.lower() in ("true", "false"):
+        value = value.lower() == "true"
+
+    # Auto-convert numeric strings
+    try:
+        if "." in value:
+            value = float(value)
+        else:
+            value = int(value)
+    except ValueError:
+        pass  # Keep as string
+
+    config_manager.set_config(key, value, category)
+    click.echo(f"✅ Set {key} = {value}")
+
+
+@config.command("list")
+@click.option("--category", help="Filter by category")
+@click.option(
+    "--hide-secrets", is_flag=True, default=True, help="Hide sensitive values"
+)
+def config_list(category, hide_secrets):
+    """List configuration entries."""
+    config_manager = get_config_manager()
+    config_dict = config_manager.list_config(category)
+
+    if not config_dict:
+        click.echo("No configuration entries found")
+        return
+
+    for key, value in sorted(config_dict.items()):
+        if hide_secrets and any(
+            secret in key.lower() for secret in ["token", "password", "secret"]
+        ):
+            display_value = "*" * 8
+        else:
+            display_value = str(value)
+
+        click.echo(f"{key} = {display_value}")
+
+
+@config.command("delete")
+@click.argument("key")
+@click.option("--confirm", is_flag=True, help="Skip confirmation prompt")
+def config_delete(key, confirm):
+    """Delete configuration entry."""
+    config_manager = get_config_manager()
+
+    if not confirm:
+        if not click.confirm(f"Delete configuration key '{key}'?"):
+            click.echo("Cancelled")
+            return
+
+    if config_manager.db.delete_config(key):
+        click.echo(f"✅ Deleted {key}")
+    else:
+        click.echo(f"Configuration key '{key}' not found", err=True)
+        exit(1)
+
+
+@config.command("export")
+@click.option("--output", "-o", help="Output file path")
+def config_export(output):
+    """Export configuration to JSON file."""
+    import json
+
+    config_manager = get_config_manager()
+    config_data = config_manager.export_config()
+
+    if output:
+        with open(output, "w") as f:
+            json.dump(config_data, f, indent=2, ensure_ascii=False)
+        click.echo(f"✅ Configuration exported to {output}")
+    else:
+        click.echo(json.dumps(config_data, indent=2, ensure_ascii=False))
+
+
+@config.command("import")
+@click.argument("input_file")
+@click.option("--overwrite", is_flag=True, help="Overwrite existing entries")
+def config_import(input_file, overwrite):
+    """Import configuration from JSON file."""
+    import json
+
+    try:
+        with open(input_file, "r") as f:
+            config_data = json.load(f)
+    except FileNotFoundError:
+        click.echo(f"File '{input_file}' not found", err=True)
+        exit(1)
+    except json.JSONDecodeError as e:
+        click.echo(f"Invalid JSON file: {e}", err=True)
+        exit(1)
+
+    config_manager = get_config_manager()
+    config_manager.import_config(config_data, overwrite=overwrite)
+
+    if overwrite:
+        click.echo("✅ Configuration imported with overwrite")
+    else:
+        click.echo("✅ Configuration imported (existing entries preserved)")
+
+
+@config.command("validate")
+def config_validate():
+    """Validate current configuration and test API connections."""
+    try:
+        config = load_config()
+    except Exception as e:
+        click.echo(f"❌ Failed to load configuration: {e}", err=True)
+        exit(1)
+
+    # Validate configuration
+    config_errors = validate_configuration(config)
+
+    if config_errors:
+        click.echo("❌ Configuration validation failed:")
+        for error in config_errors:
+            click.echo(f"  - {error}")
+        exit(1)
+
+    # Test API connections
+    click.echo("🔗 Testing API connections...")
+    api_results = test_api_connections(config)
+
+    all_success = True
+    for service, result in api_results.items():
+        if result["success"]:
+            click.echo(f"  ✅ {service}: Connected")
+        else:
+            click.echo(f"  ❌ {service}: {result['error']}")
+            all_success = False
+
+    if all_success:
+        click.echo("✅ Configuration is valid and all APIs are accessible")
+    else:
+        click.echo("❌ Some API connections failed")
+        exit(1)
+
+
+@cli.command()
+@click.option("--host", default="0.0.0.0", help="Host to bind to")  # nosec B104
+@click.option("--port", default=8080, help="Port to bind to")
+def serve(host, port):
+    """Start web service mode with admin dashboard."""
+    click.echo("🌐 Starting jira2solidtime admin dashboard...")
+
+    try:
+        # Verify configuration exists
+        load_config()  # Just verify it loads
+        click.echo("✅ Configuration loaded successfully")
+
+        # Start web service
+        web_service = WebService(host=host, port=port)
+        web_service.run()
+
+    except KeyboardInterrupt:
+        click.echo("\n🛑 Shutting down web service...")
+    except Exception as e:
+        click.echo(f"❌ Failed to start web service: {e}", err=True)
+        exit(1)
 
 
 def main():
