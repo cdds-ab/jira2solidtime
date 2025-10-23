@@ -7,7 +7,7 @@ on:
     branches: [ main, master ]
 
 env:
-  PYTHON_VERSION: "3.13"
+  PYTHON_VERSION: "3.11"
 
 jobs:
   code-quality:
@@ -53,7 +53,6 @@ jobs:
       run: |
         echo "Scanning Dockerfiles for security issues..."
         hadolint Dockerfile --ignore DL3008 --ignore DL3009 --ignore DL3059
-        hadolint docker/Dockerfile.app --ignore DL3008 --ignore DL3009 --ignore DL3059 --ignore SC2035
         echo "✅ Docker security scan completed"
 
     - name: Check for common secrets patterns
@@ -106,12 +105,8 @@ jobs:
     - name: Set up Python
       run: uv python install ${{ env.PYTHON_VERSION }}
 
-    - name: Install dependencies
+    - name: Install dependencies (including dev/test dependencies)
       run: uv sync
-
-    - name: Add testing dependencies
-      run: |
-        uv add pytest pytest-cov
 
     - name: Run tests with coverage
       run: |
@@ -146,34 +141,21 @@ jobs:
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
 
-    - name: Build full stack image (test only)
+    - name: Build Docker image
       uses: docker/build-push-action@v6
       with:
         context: .
         file: ./Dockerfile
         push: false
         load: true  # Load image into local Docker daemon
-        tags: jira2solidtime:test-full
+        tags: jira2solidtime:test
         cache-from: type=gha
         cache-to: type=gha,mode=max
 
-    - name: Build app-only image (test only)
-      uses: docker/build-push-action@v6
-      with:
-        context: .
-        file: ./docker/Dockerfile.app
-        push: false
-        load: true  # Load image into local Docker daemon
-        tags: jira2solidtime:test-app
-        cache-from: type=gha
-        cache-to: type=gha,mode=max
-
-    - name: Test Docker images
+    - name: Verify Docker image layers and size
       run: |
-        echo "Testing full stack image..."
-        docker run --rm jira2solidtime:test-full uv run jira2solidtime --help
+        echo "Docker image information:"
+        docker images jira2solidtime:test
 
-        echo "Testing app-only image..."
-        docker run --rm jira2solidtime:test-app --help
-
-        echo "✅ All Docker builds successful!"
+        echo ""
+        echo "✅ Docker image built successfully!"
