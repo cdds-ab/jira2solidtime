@@ -72,9 +72,27 @@ class Syncer:
 
         for worklog in worklogs:
             try:
-                # Extract Jira issue key
+                # Extract Jira issue information from Tempo worklog
                 issue = worklog.get("issue", {})
+                issue_id = issue.get("id")
                 issue_key = issue.get("key")
+
+                # If no key in worklog, fetch from Jira using issue ID
+                if not issue_key and issue_id:
+                    try:
+                        jira_issue = self.jira_client.get_issue(str(issue_id))
+                        issue_key = jira_issue.get("key")
+                        logger.debug(f"Fetched issue key {issue_key} from Jira for ID {issue_id}")
+                    except Exception as e:
+                        logger.warning(f"Could not fetch issue {issue_id} from Jira: {e}")
+                        skipped += 1
+                        continue
+
+                if not issue_key:
+                    logger.warning(f"Could not extract issue key from worklog (ID: {issue_id})")
+                    skipped += 1
+                    continue
+
                 project_key = issue_key.split("-")[0] if issue_key else None
 
                 if not project_key:
