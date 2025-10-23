@@ -1,0 +1,25 @@
+{
+  "jira": {
+    "base_url": "https://your-domain.atlassian.net",
+    "user_email": "your-email@company.com",
+    "api_token": "your-jira-api-token"
+  },
+  "tempo": {
+    "api_token": "your-tempo-api-token"
+  },
+  "solidtime": {
+    "base_url": "https://your-solidtime-instance.com",
+    "api_token": "your-solidtime-api-token",
+    "organization_id": "your-organization-id"
+  },
+  "sync": {
+    "schedule": "0 8 * * *",
+    "days_back": 30
+  },
+  "mappings": {
+    "JIRA-KEY": "Solidtime Project Name"
+  },
+  "web": {
+    "port": 8080
+  }
+}

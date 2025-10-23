@@ -7,17 +7,8 @@ authors = [
 ]
 dependencies = [
     "requests>=2.31.0",
-    "python-dotenv>=1.0.0",
-    "pyyaml>=6.0.1",
-    "pandas>=2.0.0",
-    "click>=8.1.0",
-    "tenacity>=9.1.2",
-    "rich>=13.0.0",
-    "structlog>=23.0.0",
-    "prometheus-client>=0.19.0",
-    "fastapi>=0.104.0",
-    "uvicorn>=0.24.0",
-    "jinja2>=3.1.0",
+    "apscheduler>=3.10.4",
+    "flask>=3.0.0",
 ]
 requires-python = ">=3.10"
 
@@ -50,14 +41,11 @@ Issues = "https://github.com/cdds-ab/jira2solidtime/issues"
 [dependency-groups]
 dev = [
     "ruff>=0.1.0",
-    "black>=23.0.0",
     "mypy>=1.0.0",
     "pytest>=7.0.0",
     "pytest-cov>=4.0.0",
     "pre-commit>=3.0.0",
-    "types-requests>=2.32.4.20250913",
-    "types-pyyaml>=6.0.12.20250915",
-    "pandas-stubs>=2.3.2.250827",
+    "types-requests>=2.31.0.0",
     "bandit[toml]>=1.8.6",
     "detect-secrets>=1.5.0",
 ]
@@ -73,19 +61,49 @@ path = "src/jira2solidtime/__version__.py"
 python_version = "3.10"
 packages = ["src/jira2solidtime"]
 strict = false
-warn_return_any = false
 warn_unused_configs = true
-disallow_untyped_defs = false
-ignore_missing_imports = false
-
-# Disable warnings for JSON API responses
-disable_error_code = ["no-any-return"]
+ignore_missing_imports = true
+check_untyped_defs = false
+disallow_any_unimported = false
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
 
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+extend-select = [
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # Pyflakes
+    "I",    # isort
+    "C4",   # flake8-comprehensions
+    "B",    # flake8-bugbear
+    "S",    # flake8-bandit
+]
+ignore = [
+    "E501",  # line too long (handled by formatter)
+    "S104",  # binding to 0.0.0.0 is intentional for Docker
+]
+exclude = [
+    ".git",
+    ".venv",
+    "__pycache__",
+    "tests",
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["jira2solidtime"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "auto"
+
 [tool.bandit]
 exclude_dirs = ["tests", ".venv"]
-skips = ["B101"]  # Skip assert_used test
+skips = ["B101"]  # Skip assert_used in tests
 severity = "medium"

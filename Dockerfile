@@ -1,36 +1,23 @@
-FROM python:3.13-slim
+FROM python:3.11-slim
 
-# Install uv for fast dependency management
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/uv
+# Install uv
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
-# Set working directory
 WORKDIR /app
 
-# Create non-root user with matching host UID/GID
-RUN groupadd -r appuser -g 1000 && useradd -r -g appuser -u 1000 appuser
-
-# Copy dependency files and source structure
-COPY pyproject.toml uv.lock README.md ./
-COPY src/ ./src/
-COPY config/ ./config/
+# Copy project files
+COPY pyproject.toml .
+COPY src/ src/
+COPY config.json .
 
 # Install dependencies
 RUN uv sync --frozen --no-dev
 
-# Create required directories and fix permissions
-RUN mkdir -p /app/data /app/logs /metrics /home/appuser/.cache && \
-    chown -R appuser:appuser /app /metrics /home/appuser
+# Create data directory
+RUN mkdir -p data
 
-# Switch to non-root user
-USER appuser
+# Expose web port
+EXPOSE 8080
 
-# Set environment variables
-ENV PYTHONPATH=/app/src
-ENV METRICS_DIR=/metrics
-
-# Health check - simple check that app can start
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD uv run jira2solidtime --help > /dev/null || exit 1
-
-# Default command - run service mode
-CMD ["uv", "run", "jira2solidtime", "serve", "--host", "0.0.0.0", "--port", "8080"]
+# Run the application
+CMD ["uv", "run", "src/jira2solidtime/main.py"]
