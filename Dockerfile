@@ -5,10 +5,10 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
 WORKDIR /app
 
-# Copy project files
+# Copy project files (IMPORTANT: config.json with credentials is ignored via .dockerignore)
 COPY pyproject.toml .
 COPY src/ src/
-COPY config.json .
+COPY config.json.example .
 
 # Install dependencies
 RUN uv sync --frozen --no-dev
