@@ -6,7 +6,7 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 WORKDIR /app
 
 # Copy project files (IMPORTANT: config.json with credentials is ignored via .dockerignore)
-COPY pyproject.toml .
+COPY pyproject.toml uv.lock README.md LICENSE .
 COPY src/ src/
 COPY config.json.example .
 
