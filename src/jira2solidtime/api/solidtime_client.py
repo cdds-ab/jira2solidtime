@@ -55,7 +55,8 @@ class SolidtimeClient:
         Returns:
             List of projects
         """
-        response = self._make_request("GET", "/projects")
+        endpoint = f"/organizations/{self.organization_id}/projects"
+        response = self._make_request("GET", endpoint)
         data = response.json()
         return data.get("data", [])
 
@@ -87,7 +88,8 @@ class SolidtimeClient:
             "description": description,
         }
 
-        response = self._make_request("POST", "/time-entries", json=payload)
+        endpoint = f"/organizations/{self.organization_id}/time-entries"
+        response = self._make_request("POST", endpoint, json=payload)
         return response.json()
 
     def get_time_entries(self, start_date: datetime, end_date: datetime) -> list[dict[str, Any]]:
@@ -104,7 +106,8 @@ class SolidtimeClient:
             "from": start_date.isoformat(),
             "to": end_date.isoformat(),
         }
-        response = self._make_request("GET", "/time-entries", params=params)
+        endpoint = f"/organizations/{self.organization_id}/time-entries"
+        response = self._make_request("GET", endpoint, params=params)
         data = response.json()
         return data.get("data", [])
 
