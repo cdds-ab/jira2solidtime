@@ -23,8 +23,8 @@ jobs:
         with:
           version: "latest"
 
-      - name: Set up Python 3.13
-        run: uv python install 3.13
+      - name: Set up Python 3.11
+        run: uv python install 3.11
 
       - name: Install dependencies
         run: uv sync
@@ -54,8 +54,8 @@ jobs:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKERHUB_PAT }}
 
-      - name: Extract metadata for full stack
-        id: meta-full
+      - name: Extract metadata
+        id: meta
         uses: docker/metadata-action@v5
         with:
           images: cddsab/jira2solidtime
@@ -65,36 +65,14 @@ jobs:
             type=raw,value=beta,enable=${{ contains(github.ref, 'beta') }}
             type=raw,value=rc,enable=${{ contains(github.ref, 'rc') }}
 
-      - name: Extract metadata for app-only
-        id: meta-app
-        uses: docker/metadata-action@v5
-        with:
-          images: cddsab/jira2solidtime
-          tags: |
-            type=ref,event=tag,suffix=-app
-            type=raw,value=latest-app,enable={{is_default_branch}}
-            type=raw,value=beta-app,enable=${{ contains(github.ref, 'beta') }}
-            type=raw,value=rc-app,enable=${{ contains(github.ref, 'rc') }}
-
-      - name: Build and push full stack image
+      - name: Build and push Docker image
         uses: docker/build-push-action@v6
         with:
           context: .
           file: ./Dockerfile
           push: true
-          tags: ${{ steps.meta-full.outputs.tags }}
-          labels: ${{ steps.meta-full.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-      - name: Build and push app-only image
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: ./docker/Dockerfile.app
-          push: true
-          tags: ${{ steps.meta-app.outputs.tags }}
-          labels: ${{ steps.meta-app.outputs.labels }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -121,27 +99,28 @@ jobs:
 
           ### Installation Options
 
-          **Docker (Application Only):**
+          **Docker:**
           \`\`\`bash
-          docker run cddsab/jira2solidtime:${VERSION}-app --help
+          docker run -d \\
+            -p 8080:8080 \\
+            -v \$(pwd)/config.json:/app/config.json \\
+            -v app-data:/app/data \\
+            cddsab/jira2solidtime:${VERSION}
           \`\`\`
 
-          **Docker Compose (Full Stack with Monitoring):**
+          **Docker Compose:**
           \`\`\`bash
           curl -O https://github.com/${{ github.repository }}/releases/download/v${VERSION}/docker-compose.yml
           docker-compose up -d
           \`\`\`
 
-          ### What's Changed
+          ### What's New
 
-          See [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/v${VERSION}/CHANGELOG.md) for detailed changes.
+          For detailed changes, see the commit history on GitHub.
 
-          ### Artifacts
+          ### Docker Image
 
-          - 🐳 **Docker Images**:
-            - Full stack: \`cddsab/jira2solidtime:${VERSION}\`
-            - App only: \`cddsab/jira2solidtime:${VERSION}-app\`
-          - 📋 **Compose Files**: Available as release assets
+          - 🐳 **Docker**: \`cddsab/jira2solidtime:${VERSION}\`
           EOF
 
       - name: Create GitHub Release
@@ -150,9 +129,5 @@ jobs:
           body_path: release_notes.md
           draft: false
           prerelease: ${{ contains(github.ref, 'beta') || contains(github.ref, 'rc') || contains(github.ref, 'alpha') }}
-          files: |
-            docker-compose.yml
-            compose/docker-compose.app.yml
-            compose/docker-compose.dev.yml
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
