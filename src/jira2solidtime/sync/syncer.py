@@ -121,12 +121,16 @@ class Syncer:
 
                 # Create time entry in Solidtime
                 duration_minutes = worklog.get("timeSpentSeconds", 0) // 60
-                work_date = datetime.fromisoformat(worklog.get("startDate", ""))
+
+                # Parse start date and time from worklog
+                start_date_str = worklog.get("startDate", "")
+                start_time_str = worklog.get("startTime", "08:00:00")
+                work_date = datetime.fromisoformat(f"{start_date_str}T{start_time_str}")
+
                 description = worklog.get("comment", issue_key or "")
 
                 self.solidtime_client.create_time_entry(
                     project_id=project_id,
-                    task_id="",  # Could be mapped from issue type
                     duration_minutes=duration_minutes,
                     date=work_date,
                     description=description,

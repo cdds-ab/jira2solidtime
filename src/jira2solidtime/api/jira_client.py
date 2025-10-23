@@ -35,7 +35,7 @@ class JiraClient:
         Returns:
             Response object
         """
-        url = f"{self.base_url}/rest/api/3{endpoint}"
+        url = f"{self.base_url}/rest/api/2{endpoint}"
         auth = (self.email, self.api_token)
 
         try:
@@ -52,12 +52,12 @@ class JiraClient:
         """Get issue details.
 
         Args:
-            issue_key: Issue key (e.g., 'PROJ-123')
+            issue_key: Issue key or ID (e.g., 'PROJ-123' or '10386')
 
         Returns:
             Issue data
         """
-        response = self._make_request("GET", f"/issues/{issue_key}")
+        response = self._make_request("GET", f"/issue/{issue_key}")
         return response.json()
 
     def get_issues(self, project_key: str) -> list[dict[str, Any]]:
