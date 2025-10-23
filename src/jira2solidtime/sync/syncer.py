@@ -131,7 +131,8 @@ class Syncer:
                 start_time_str = worklog.get("startTime", "08:00:00")
                 work_date = datetime.fromisoformat(f"{start_date_str}T{start_time_str}")
                 comment = worklog.get("comment", "")
-                description = f"{issue_key}: {comment} [JiraSync:{tempo_worklog_id}]".strip()
+                # Clean description without tracking tags
+                description = f"{issue_key}: {comment}".strip() if comment else issue_key
 
                 # Check if already synced (CREATE vs UPDATE)
                 entry_id = self.mapping.get_solidtime_entry_id(tempo_worklog_id)
@@ -177,15 +178,16 @@ class Syncer:
                             }
                         )
                 else:
-                    # UPDATE: Worklog changed
-                    result = self.solidtime_client.update_time_entry(
+                    # UPDATE: Try to update existing entry
+                    update_result: Optional[dict[str, Any]] = self.solidtime_client.update_time_entry(
                         entry_id=entry_id,
                         duration_minutes=duration_minutes,
                         date=work_date,
                         description=description,
                     )
 
-                    if result.get("data"):
+                    if update_result and update_result.get("data"):
+                        # UPDATE succeeded
                         updated += 1
                         self.mapping.mark_processed(tempo_worklog_id)
                         actions.append(
@@ -198,7 +200,56 @@ class Syncer:
                             }
                         )
                         logger.debug(f"Updated entry for {issue_key}: {duration_minutes}m")
+                    elif update_result is None:
+                        # Entry not found (404) - was deleted manually
+                        # Fallback: Remove mapping and create as new entry
+                        logger.info(
+                            f"Entry {entry_id} not found, removing mapping and creating as new"
+                        )
+                        self.mapping.remove_mapping(tempo_worklog_id)
+
+                        # CREATE as new entry
+                        create_result = self.solidtime_client.create_time_entry(
+                            project_id=project_id,
+                            duration_minutes=duration_minutes,
+                            date=work_date,
+                            description=description,
+                        )
+
+                        new_entry_id = create_result.get("data", {}).get("id")
+                        if new_entry_id:
+                            self.mapping.add_mapping(
+                                tempo_worklog_id=str(tempo_worklog_id),
+                                solidtime_entry_id=new_entry_id,
+                                issue_key=issue_key,
+                            )
+                            created += 1
+                            self.mapping.mark_processed(tempo_worklog_id)
+                            actions.append(
+                                {
+                                    "action": "CREATE",
+                                    "issue_key": issue_key,
+                                    "worklog_comment": comment,
+                                    "duration_minutes": duration_minutes,
+                                    "status": "success",
+                                    "reason": "Recovered after manual delete",
+                                }
+                            )
+                            logger.debug(f"Recovered entry for {issue_key}: {duration_minutes}m")
+                        else:
+                            failed += 1
+                            actions.append(
+                                {
+                                    "action": "RECOVER",
+                                    "issue_key": issue_key,
+                                    "worklog_comment": comment,
+                                    "duration_minutes": duration_minutes,
+                                    "status": "failed",
+                                    "error": "Recovery failed",
+                                }
+                            )
                     else:
+                        # UPDATE failed for other reason
                         failed += 1
                         actions.append(
                             {

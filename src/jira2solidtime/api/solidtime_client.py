@@ -2,7 +2,7 @@
 
 import logging
 from datetime import datetime, timedelta
-from typing import Any
+from typing import Any, Optional
 
 import requests
 
@@ -187,7 +187,7 @@ class SolidtimeClient:
         date: datetime,
         description: str = "",
         billable: bool = True,
-    ) -> dict[str, Any]:
+    ) -> Optional[dict[str, Any]]:
         """Update an existing time entry.
 
         Args:
@@ -198,7 +198,7 @@ class SolidtimeClient:
             billable: Whether time entry is billable
 
         Returns:
-            Updated time entry data
+            Updated time entry data, or None if entry not found or update failed
         """
         # Convert minutes to seconds
         duration_seconds = duration_minutes * 60
@@ -221,8 +221,19 @@ class SolidtimeClient:
         logger.debug(f"Updating time entry {entry_id}: {payload}")
 
         endpoint = f"/organizations/{self.organization_id}/time-entries/{entry_id}"
-        response = self._make_request("PUT", endpoint, json=payload)
-        return response.json()
+        try:
+            response = self._make_request("PUT", endpoint, json=payload)
+            return response.json()
+        except Exception as e:
+            # Check if it's a 404 (entry not found)
+            if "404" in str(e) or "not found" in str(e).lower():
+                logger.warning(
+                    f"Time entry {entry_id} not found (404), may have been deleted manually"
+                )
+                return None
+            # Re-raise other errors
+            logger.error(f"Failed to update time entry {entry_id}: {e}")
+            raise
 
     def delete_time_entry(self, entry_id: str) -> bool:
         """Delete a time entry.
