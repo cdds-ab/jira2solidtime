@@ -1,4 +1,4 @@
-# Environment variables
+# Environment variables (secrets!)
 .env
 .env.local
 .env.*.local
@@ -51,24 +51,14 @@ htmlcov/
 logs/
 *.log
 
-# Export files (optional - might want to keep them)
-exports/*.csv
-exports/*.json
-
-# Test files and debug scripts
-test_*.csv
-*_test.csv
-debug_*.py
-final_*.csv
-optimized_*.csv
-
 # Temporary files
 temp_*.py
 temp_*.csv
 *_temp.*
 
-# AI tools and editor configurations
-.claude/
+# Data files
+data/config.db
+data/history.db
 
 # OS
 .DS_Store
@@ -77,4 +67,4 @@ temp_*.csv
 .Spotlight-V100
 .Trashes
 ehthumbs.db
-Thumbs.dbdata/config.db
+Thumbs.db
