@@ -180,6 +180,68 @@ class SolidtimeClient:
         response = self._make_request("POST", endpoint, json=payload)
         return response.json()
 
+    def update_time_entry(
+        self,
+        entry_id: str,
+        duration_minutes: int,
+        date: datetime,
+        description: str = "",
+        billable: bool = True,
+    ) -> dict[str, Any]:
+        """Update an existing time entry.
+
+        Args:
+            entry_id: Solidtime time entry ID
+            duration_minutes: Duration in minutes
+            date: Entry date and time
+            description: Entry description
+            billable: Whether time entry is billable
+
+        Returns:
+            Updated time entry data
+        """
+        # Convert minutes to seconds
+        duration_seconds = duration_minutes * 60
+
+        # Format start time with Z suffix (UTC timezone)
+        start_str = date.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+        # Calculate end time = start + duration
+        end_date = date + timedelta(seconds=duration_seconds)
+        end_str = end_date.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+        payload = {
+            "start": start_str,
+            "end": end_str,
+            "duration": duration_seconds,
+            "billable": billable,
+            "description": description,
+        }
+
+        logger.debug(f"Updating time entry {entry_id}: {payload}")
+
+        endpoint = f"/organizations/{self.organization_id}/time-entries/{entry_id}"
+        response = self._make_request("PUT", endpoint, json=payload)
+        return response.json()
+
+    def delete_time_entry(self, entry_id: str) -> bool:
+        """Delete a time entry.
+
+        Args:
+            entry_id: Solidtime time entry ID
+
+        Returns:
+            True if successful, False otherwise
+        """
+        endpoint = f"/organizations/{self.organization_id}/time-entries/{entry_id}"
+        try:
+            self._make_request("DELETE", endpoint)
+            logger.debug(f"Deleted time entry {entry_id}")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to delete time entry {entry_id}: {e}")
+            return False
+
     def get_time_entries(self, start_date: datetime, end_date: datetime) -> list[dict[str, Any]]:
         """Get time entries for date range.
 

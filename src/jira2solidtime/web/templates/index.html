@@ -179,7 +179,15 @@
                 </div>
                 <div class="stat-box">
                     <div class="number" id="totalCreated">0</div>
-                    <div class="label">Entries Created</div>
+                    <div class="label">Created</div>
+                </div>
+                <div class="stat-box">
+                    <div class="number" id="totalUpdated">0</div>
+                    <div class="label">Updated</div>
+                </div>
+                <div class="stat-box">
+                    <div class="number" id="totalDeleted">0</div>
+                    <div class="label">Deleted</div>
                 </div>
                 <div class="stat-box">
                     <div class="number" id="avgDuration">0s</div>
@@ -195,7 +203,27 @@
             <div id="message"></div>
         </div>
 
-        <!-- History -->
+        <!-- Last Sync Actions -->
+        <div class="card">
+            <h2>Last Sync Details</h2>
+            <div class="sync-history">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Action</th>
+                            <th>Ticket</th>
+                            <th>Worklog</th>
+                            <th>Duration</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody id="actionsTable">
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Sync History -->
         <div class="card">
             <h2>Recent Sync History</h2>
             <div class="sync-history">
@@ -205,8 +233,9 @@
                             <th>Timestamp</th>
                             <th>Status</th>
                             <th>Created</th>
+                            <th>Updated</th>
+                            <th>Deleted</th>
                             <th>Failed</th>
-                            <th>Skipped</th>
                             <th>Duration</th>
                         </tr>
                     </thead>
@@ -218,6 +247,8 @@
     </div>
 
     <script>
+        let lastSyncResult = null;
+
         async function loadStats() {
             try {
                 const response = await fetch('/api/stats');
@@ -226,11 +257,59 @@
                 document.getElementById('totalSyncs').textContent = stats.total_syncs || 0;
                 document.getElementById('successfulSyncs').textContent = stats.successful || 0;
                 document.getElementById('totalCreated').textContent = stats.total_created || 0;
+                document.getElementById('totalUpdated').textContent = stats.total_updated || 0;
+                document.getElementById('totalDeleted').textContent = stats.total_deleted || 0;
                 document.getElementById('avgDuration').textContent =
                     ((stats.avg_duration || 0).toFixed(1)) + 's';
             } catch (error) {
                 console.error('Failed to load stats:', error);
             }
+        }
+
+        function getActionColor(action) {
+            switch(action) {
+                case 'CREATE': return '#27ae60';
+                case 'UPDATE': return '#3498db';
+                case 'DELETE': return '#e74c3c';
+                default: return '#95a5a6';
+            }
+        }
+
+        function getActionIcon(action) {
+            switch(action) {
+                case 'CREATE': return '✨';
+                case 'UPDATE': return '🔄';
+                case 'DELETE': return '🗑️';
+                default: return '⚠️';
+            }
+        }
+
+        function loadLastSyncActions() {
+            if (!lastSyncResult || !lastSyncResult.actions) {
+                document.getElementById('actionsTable').innerHTML = '<tr><td colspan="5" style="text-align: center; color: #999;">No recent sync</td></tr>';
+                return;
+            }
+
+            const table = document.getElementById('actionsTable');
+            table.innerHTML = '';
+
+            lastSyncResult.actions.forEach(action => {
+                const row = document.createElement('tr');
+                const statusClass = action.status === 'success' ? 'success' : 'error';
+                const statusText = action.status === 'success' ? '✅' : '❌';
+                const duration = action.duration_minutes ? `${action.duration_minutes}m` : '-';
+                const icon = getActionIcon(action.action);
+                const color = getActionColor(action.action);
+
+                row.innerHTML = `
+                    <td style="color: ${color}; font-weight: bold;">${icon} ${action.action}</td>
+                    <td>${action.issue_key || '-'}</td>
+                    <td style="max-width: 300px; overflow: hidden; text-overflow: ellipsis;">${action.worklog_comment || action.reason || '-'}</td>
+                    <td>${duration}</td>
+                    <td><span class="${statusClass}">${statusText} ${action.status}</span></td>
+                `;
+                table.appendChild(row);
+            });
         }
 
         async function loadHistory() {
@@ -251,8 +330,9 @@
                         <td>${date}</td>
                         <td><span class="${statusClass}">${statusText}</span></td>
                         <td>${sync.created || 0}</td>
+                        <td>${sync.updated || 0}</td>
+                        <td>${sync.deleted || 0}</td>
                         <td>${sync.failed || 0}</td>
-                        <td>${sync.skipped || 0}</td>
                         <td>${duration}s</td>
                     `;
                     table.appendChild(row);
@@ -269,11 +349,13 @@
             try {
                 const response = await fetch('/api/sync', { method: 'POST' });
                 const result = await response.json();
+                lastSyncResult = result;
 
                 if (result.success) {
+                    const summary = `${result.created} created, ${result.updated || 0} updated, ${result.deleted || 0} deleted`;
                     messageDiv.innerHTML = `
                         <div class="message success">
-                            ✅ Sync completed: ${result.created} created, ${result.failed} failed
+                            ✅ Sync completed: ${summary}
                         </div>
                     `;
                 } else {
@@ -288,7 +370,8 @@
                 setTimeout(() => {
                     loadStats();
                     loadHistory();
-                }, 1000);
+                    loadLastSyncActions();
+                }, 500);
             } catch (error) {
                 messageDiv.innerHTML = `
                     <div class="message error">
@@ -301,6 +384,7 @@
         // Load data on page load
         loadStats();
         loadHistory();
+        loadLastSyncActions();
 
         // Refresh every 30 seconds
         setInterval(() => {

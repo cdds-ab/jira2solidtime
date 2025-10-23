@@ -2,12 +2,13 @@
 
 import logging
 from datetime import datetime, timedelta
-from typing import Any
+from typing import Any, Optional
 
 from jira2solidtime.api.jira_client import JiraClient
 from jira2solidtime.api.solidtime_client import SolidtimeClient
 from jira2solidtime.api.tempo_client import TempoClient
 from jira2solidtime.sync.mapper import Mapper
+from jira2solidtime.sync.worklog_mapping import WorklogMapping
 
 logger = logging.getLogger(__name__)
 
@@ -21,6 +22,7 @@ class Syncer:
         jira_client: JiraClient,
         solidtime_client: SolidtimeClient,
         mapper: Mapper,
+        mapping: Optional[WorklogMapping] = None,
     ) -> None:
         """Initialize syncer.
 
@@ -29,22 +31,28 @@ class Syncer:
             jira_client: Jira API client
             solidtime_client: Solidtime API client
             mapper: Project mapper
+            mapping: Worklog mapping tracker (creates new if None)
         """
         self.tempo_client = tempo_client
         self.jira_client = jira_client
         self.solidtime_client = solidtime_client
         self.mapper = mapper
+        self.mapping = mapping or WorklogMapping()
 
     def sync(self, days_back: int = 30) -> dict[str, Any]:
-        """Perform synchronization.
+        """Perform complete synchronization with CREATE/UPDATE/DELETE.
 
         Args:
             days_back: Number of days to sync back
 
         Returns:
-            Sync result statistics
+            Sync result with detailed action history
         """
         logger.info(f"Starting sync for last {days_back} days...")
+        start_time = datetime.now()
+
+        # Reset processed flags for this sync run
+        self.mapping.reset_processed()
 
         # Calculate date range
         to_date = datetime.now()
@@ -65,91 +73,203 @@ class Syncer:
             logger.error(f"Failed to fetch Solidtime projects: {e}")
             return {"success": False, "error": str(e)}
 
-        # Sync worklogs
+        # Track actions for detailed reporting
+        actions: list[dict[str, Any]] = []
         created = 0
+        updated = 0
+        deleted = 0
         failed = 0
-        skipped = 0
 
+        # Phase 1: CREATE and UPDATE
         for worklog in worklogs:
             try:
-                # Extract Jira issue information from Tempo worklog
+                # Get Tempo worklog ID
+                tempo_worklog_id = worklog.get("tempoWorklogId")
+                if not tempo_worklog_id:
+                    logger.warning("Worklog missing tempoWorklogId, skipping")
+                    continue
+
+                # Get basic info for error messages
                 issue = worklog.get("issue", {})
                 issue_id = issue.get("id")
                 issue_key = issue.get("key")
 
-                # If no key in worklog, fetch from Jira using issue ID
+                # Fetch full issue if key not in worklog
                 if not issue_key and issue_id:
                     try:
                         jira_issue = self.jira_client.get_issue(str(issue_id))
                         issue_key = jira_issue.get("key")
-                        logger.debug(f"Fetched issue key {issue_key} from Jira for ID {issue_id}")
                     except Exception as e:
-                        logger.warning(f"Could not fetch issue {issue_id} from Jira: {e}")
-                        skipped += 1
+                        logger.warning(f"Could not fetch issue {issue_id}: {e}")
+                        failed += 1
                         continue
 
                 if not issue_key:
-                    logger.warning(f"Could not extract issue key from worklog (ID: {issue_id})")
-                    skipped += 1
+                    logger.warning(f"No issue key for worklog {tempo_worklog_id}")
+                    failed += 1
                     continue
 
-                project_key = issue_key.split("-")[0] if issue_key else None
-
-                if not project_key:
-                    logger.warning(f"Could not extract project key from {issue_key}")
-                    skipped += 1
-                    continue
-
-                # Map to Solidtime project
+                # Get project info
+                project_key = issue_key.split("-")[0]
                 solidtime_project_name = self.mapper.map_project(project_key)
                 if not solidtime_project_name:
-                    logger.debug(f"No mapping found for {project_key}, skipping")
-                    skipped += 1
+                    logger.debug(f"No mapping for project {project_key}")
                     continue
 
-                # Find Solidtime project ID
-                project_id = None
-                for proj in projects:
-                    if proj.get("name") == solidtime_project_name:
-                        project_id = proj.get("id")
-                        break
-
+                project_id = next(
+                    (p.get("id") for p in projects if p.get("name") == solidtime_project_name),
+                    None,
+                )
                 if not project_id:
-                    logger.warning(f"Could not find project {solidtime_project_name} in Solidtime")
-                    skipped += 1
+                    logger.warning(f"Project {solidtime_project_name} not in Solidtime")
+                    failed += 1
                     continue
 
-                # Create time entry in Solidtime
+                # Prepare time entry data
                 duration_minutes = worklog.get("timeSpentSeconds", 0) // 60
-
-                # Parse start date and time from worklog
                 start_date_str = worklog.get("startDate", "")
                 start_time_str = worklog.get("startTime", "08:00:00")
                 work_date = datetime.fromisoformat(f"{start_date_str}T{start_time_str}")
+                comment = worklog.get("comment", "")
+                description = f"{issue_key}: {comment} [JiraSync:{tempo_worklog_id}]".strip()
 
-                description = worklog.get("comment", issue_key or "")
+                # Check if already synced (CREATE vs UPDATE)
+                entry_id = self.mapping.get_solidtime_entry_id(tempo_worklog_id)
 
-                self.solidtime_client.create_time_entry(
-                    project_id=project_id,
-                    duration_minutes=duration_minutes,
-                    date=work_date,
-                    description=description,
-                )
+                if not entry_id:
+                    # CREATE: New worklog
+                    result = self.solidtime_client.create_time_entry(
+                        project_id=project_id,
+                        duration_minutes=duration_minutes,
+                        date=work_date,
+                        description=description,
+                    )
 
-                created += 1
-                logger.debug(f"Created time entry for {issue_key}: {duration_minutes}m")
+                    new_entry_id = result.get("data", {}).get("id")
+                    if new_entry_id:
+                        self.mapping.add_mapping(
+                            tempo_worklog_id=str(tempo_worklog_id),
+                            solidtime_entry_id=new_entry_id,
+                            issue_key=issue_key,
+                        )
+                        created += 1
+                        self.mapping.mark_processed(tempo_worklog_id)
+                        actions.append(
+                            {
+                                "action": "CREATE",
+                                "issue_key": issue_key,
+                                "worklog_comment": comment,
+                                "duration_minutes": duration_minutes,
+                                "status": "success",
+                            }
+                        )
+                        logger.debug(f"Created entry for {issue_key}: {duration_minutes}m")
+                    else:
+                        failed += 1
+                        actions.append(
+                            {
+                                "action": "CREATE",
+                                "issue_key": issue_key,
+                                "worklog_comment": comment,
+                                "duration_minutes": duration_minutes,
+                                "status": "failed",
+                                "error": "No entry ID in response",
+                            }
+                        )
+                else:
+                    # UPDATE: Worklog changed
+                    result = self.solidtime_client.update_time_entry(
+                        entry_id=entry_id,
+                        duration_minutes=duration_minutes,
+                        date=work_date,
+                        description=description,
+                    )
+
+                    if result.get("data"):
+                        updated += 1
+                        self.mapping.mark_processed(tempo_worklog_id)
+                        actions.append(
+                            {
+                                "action": "UPDATE",
+                                "issue_key": issue_key,
+                                "worklog_comment": comment,
+                                "duration_minutes": duration_minutes,
+                                "status": "success",
+                            }
+                        )
+                        logger.debug(f"Updated entry for {issue_key}: {duration_minutes}m")
+                    else:
+                        failed += 1
+                        actions.append(
+                            {
+                                "action": "UPDATE",
+                                "issue_key": issue_key,
+                                "worklog_comment": comment,
+                                "duration_minutes": duration_minutes,
+                                "status": "failed",
+                                "error": "Update failed",
+                            }
+                        )
 
             except Exception as e:
                 logger.error(f"Failed to sync worklog: {e}")
                 failed += 1
+                actions.append(
+                    {
+                        "action": "ERROR",
+                        "issue_key": issue_key if "issue_key" in locals() else "UNKNOWN",
+                        "status": "failed",
+                        "error": str(e),
+                    }
+                )
 
-        logger.info(f"Sync complete: created={created}, failed={failed}, skipped={skipped}")
+        # Phase 2: DELETE (Overhang cleanup)
+        for tempo_id, mapping in self.mapping.get_unprocessed_mappings():
+            try:
+                entry_id = mapping.get("solidtime_entry_id")
+                issue_key = mapping.get("issue_key", "UNKNOWN")
+
+                if entry_id and self.solidtime_client.delete_time_entry(entry_id):
+                    deleted += 1
+                    self.mapping.remove_mapping(tempo_id)
+                    actions.append(
+                        {
+                            "action": "DELETE",
+                            "issue_key": issue_key,
+                            "status": "success",
+                            "reason": "Worklog deleted from Tempo",
+                        }
+                    )
+                    logger.debug(f"Deleted entry {entry_id} for {issue_key}")
+                else:
+                    failed += 1
+                    actions.append(
+                        {
+                            "action": "DELETE",
+                            "issue_key": issue_key,
+                            "status": "failed",
+                            "error": "Delete failed",
+                        }
+                    )
+
+            except Exception as e:
+                logger.error(f"Failed to delete entry: {e}")
+                failed += 1
+
+        duration = (datetime.now() - start_time).total_seconds()
+        logger.info(
+            f"Sync complete: created={created}, updated={updated}, deleted={deleted}, "
+            f"failed={failed} ({duration:.1f}s)"
+        )
 
         return {
             "success": True,
             "created": created,
+            "updated": updated,
+            "deleted": deleted,
             "failed": failed,
-            "skipped": skipped,
             "total": len(worklogs),
+            "actions": actions,
             "timestamp": datetime.now().isoformat(),
+            "duration_seconds": duration,
         }
