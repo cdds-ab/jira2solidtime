@@ -179,11 +179,13 @@ class Syncer:
                         )
                 else:
                     # UPDATE: Try to update existing entry
-                    update_result: Optional[dict[str, Any]] = self.solidtime_client.update_time_entry(
-                        entry_id=entry_id,
-                        duration_minutes=duration_minutes,
-                        date=work_date,
-                        description=description,
+                    update_result: Optional[dict[str, Any]] = (
+                        self.solidtime_client.update_time_entry(
+                            entry_id=entry_id,
+                            duration_minutes=duration_minutes,
+                            date=work_date,
+                            description=description,
+                        )
                     )
 
                     if update_result and update_result.get("data"):

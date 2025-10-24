@@ -67,15 +67,17 @@ class SyncDaemon:
                 self.history.record_sync(
                     success=True,
                     created=result.get("created", 0),
+                    updated=result.get("updated", 0),
+                    deleted=result.get("deleted", 0),
                     failed=result.get("failed", 0),
-                    skipped=result.get("skipped", 0),
                     total=result.get("total", 0),
                     duration_seconds=duration,
+                    actions=result.get("actions", []),
                 )
                 logger.info(
                     f"Sync completed in {duration:.2f}s: "
-                    f"created={result['created']}, failed={result['failed']}, "
-                    f"skipped={result['skipped']}"
+                    f"created={result['created']}, updated={result['updated']}, "
+                    f"deleted={result['deleted']}, failed={result['failed']}"
                 )
             else:
                 self.history.record_sync(
@@ -128,7 +130,40 @@ class SyncDaemon:
             Sync result
         """
         logger.info("Manual sync triggered")
-        return self.syncer.sync(days_back=self.config.sync.get("days_back", 30))
+        start_time = time.time()
+
+        try:
+            result = self.syncer.sync(days_back=self.config.sync.get("days_back", 30))
+            duration = time.time() - start_time
+
+            if result.get("success"):
+                self.history.record_sync(
+                    success=True,
+                    created=result.get("created", 0),
+                    updated=result.get("updated", 0),
+                    deleted=result.get("deleted", 0),
+                    failed=result.get("failed", 0),
+                    total=result.get("total", 0),
+                    duration_seconds=duration,
+                    actions=result.get("actions", []),
+                )
+            else:
+                self.history.record_sync(
+                    success=False,
+                    error=result.get("error", "Unknown error"),
+                    duration_seconds=duration,
+                )
+
+            return result
+
+        except Exception as e:
+            duration = time.time() - start_time
+            self.history.record_sync(
+                success=False,
+                error=str(e),
+                duration_seconds=duration,
+            )
+            raise
 
     @staticmethod
     def _parse_cron(cron_string: str) -> dict:
