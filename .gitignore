@@ -69,3 +69,4 @@ data/history.db
 .Trashes
 ehthumbs.db
 Thumbs.db
+data/worklog_mapping.json
