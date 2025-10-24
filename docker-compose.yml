@@ -1,3 +1,15 @@
+# docker-compose.yml
+# Production-ready configuration with fixed UID 1000
+#
+# For LOCAL DEVELOPMENT:
+#   - docker-compose.override.yml is automatically loaded
+#   - Runs container with your host user UID to avoid permission issues
+#   - Use: docker compose up
+#
+# For PRODUCTION DEPLOYMENT:
+#   - Use only this file (ignore or remove the override file)
+#   - Use: docker compose -f docker-compose.yml up
+#
 version: '3.8'
 
 services:

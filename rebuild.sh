@@ -3,14 +3,17 @@ set -e
 
 echo "🔨 Rebuilding jira2solidtime..."
 
+# Export host UID/GID for docker-compose.override.yml
+export UID=$(id -u)
+export GID=$(id -g)
+
 # Stop and remove old containers
 echo "⏹️  Stopping containers..."
 docker compose down
 
-# Ensure data directory has correct permissions for non-root user
-echo "🔧 Setting data directory permissions..."
+# Create data directory (permissions handled by UID mapping)
+echo "🔧 Creating data directory..."
 mkdir -p data
-sudo chown -R 1000:1000 data || chown -R 1000:1000 data 2>/dev/null || echo "⚠️  Could not set permissions, may need sudo"
 
 # Rebuild images
 echo "🏗️  Building fresh image..."

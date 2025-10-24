@@ -1,0 +1,20 @@
+# docker-compose.override.yml
+# This file is automatically loaded by docker compose and overrides docker-compose.yml
+# Used for LOCAL DEVELOPMENT only
+#
+# For production deployment, rename this file or use:
+#   docker compose -f docker-compose.yml up
+
+services:
+  app:
+    # Run container with your user ID to avoid permission issues
+    user: "${UID:-1000}:${GID:-1000}"
+
+    # Use bind mount for easy access to logs/data
+    volumes:
+      - ./config.json:/app/config.json
+      - ./data:/app/data
+
+    # For development: show logs immediately
+    environment:
+      - PYTHONUNBUFFERED=1
