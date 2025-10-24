@@ -44,6 +44,8 @@ Pre-commit hooks match CI/CD pipeline exactly to catch issues locally:
 - `mypy` - Type checking
 - `bandit` - Security vulnerability scanner
 - `detect-secrets` - Credential detection
+- `hadolint` - Dockerfile linting
+- `checkov` - Infrastructure security scanning
 
 **Important**: Same versions as CI to prevent surprises!
 

@@ -6,15 +6,24 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 WORKDIR /app
 
 # Copy project files (IMPORTANT: config.json with credentials is ignored via .dockerignore)
-COPY pyproject.toml uv.lock README.md LICENSE .
+COPY pyproject.toml uv.lock README.md LICENSE ./
 COPY src/ src/
-COPY config.json.example .
+COPY config.json.example ./
 
 # Install dependencies
 RUN uv sync --frozen --no-dev
 
-# Create data directory
-RUN mkdir -p data
+# Create non-root user for security
+RUN useradd -m -u 1000 appuser && \
+    mkdir -p data && \
+    chown -R appuser:appuser /app
+
+# Switch to non-root user
+USER appuser
+
+# Health check for container monitoring
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8080').read()" || exit 1
 
 # Expose web port
 EXPOSE 8080
