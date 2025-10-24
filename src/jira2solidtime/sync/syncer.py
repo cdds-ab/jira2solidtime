@@ -202,35 +202,16 @@ class Syncer:
                             }
                         )
                 else:
-                    # UPDATE: Try to update existing entry
-                    update_result: Optional[dict[str, Any]] = (
-                        self.solidtime_client.update_time_entry(
-                            entry_id=entry_id,
-                            duration_minutes=duration_minutes,
-                            date=work_date,
-                            description=description,
-                        )
+                    # UPDATE: First check if entry still exists in Solidtime
+                    logger.debug(
+                        f"Checking if entry {entry_id} exists (tempo_id={tempo_worklog_id})"
                     )
+                    entry_exists = self.solidtime_client.get_time_entry(entry_id)
 
-                    if update_result and update_result.get("data"):
-                        # UPDATE succeeded
-                        updated += 1
-                        self.mapping.mark_processed(tempo_worklog_id)
-                        actions.append(
-                            {
-                                "action": "UPDATE",
-                                "issue_key": issue_key,
-                                "worklog_comment": worklog_comment,
-                                "duration_minutes": duration_minutes,
-                                "status": "success",
-                            }
-                        )
-                        logger.debug(f"Updated entry for {issue_key}: {duration_minutes}m")
-                    elif update_result is None:
-                        # Entry not found (404) - was deleted manually
-                        # Fallback: Remove mapping and create as new entry
+                    if not entry_exists:
+                        # Entry was deleted in Solidtime - remove mapping and create new
                         logger.info(
-                            f"Entry {entry_id} not found, removing mapping and creating as new"
+                            f"Entry {entry_id} not found in Solidtime, removing mapping and creating new"
                         )
                         self.mapping.remove_mapping(tempo_worklog_id)
 
@@ -271,22 +252,48 @@ class Syncer:
                                     "worklog_comment": worklog_comment,
                                     "duration_minutes": duration_minutes,
                                     "status": "failed",
-                                    "error": "Recovery failed",
+                                    "error": "Recovery failed - no entry ID",
                                 }
                             )
                     else:
-                        # UPDATE failed for other reason
-                        failed += 1
-                        actions.append(
-                            {
-                                "action": "UPDATE",
-                                "issue_key": issue_key,
-                                "worklog_comment": worklog_comment,
-                                "duration_minutes": duration_minutes,
-                                "status": "failed",
-                                "error": "Update failed",
-                            }
+                        # Entry exists - proceed with UPDATE
+                        logger.debug(f"Updating existing entry {entry_id}")
+                        update_result: Optional[dict[str, Any]] = (
+                            self.solidtime_client.update_time_entry(
+                                entry_id=entry_id,
+                                duration_minutes=duration_minutes,
+                                date=work_date,
+                                description=description,
+                            )
                         )
+
+                        if update_result and update_result.get("data"):
+                            # UPDATE succeeded
+                            updated += 1
+                            self.mapping.mark_processed(tempo_worklog_id)
+                            actions.append(
+                                {
+                                    "action": "UPDATE",
+                                    "issue_key": issue_key,
+                                    "worklog_comment": worklog_comment,
+                                    "duration_minutes": duration_minutes,
+                                    "status": "success",
+                                }
+                            )
+                            logger.debug(f"Updated entry for {issue_key}: {duration_minutes}m")
+                        else:
+                            # UPDATE failed for other reason
+                            failed += 1
+                            actions.append(
+                                {
+                                    "action": "UPDATE",
+                                    "issue_key": issue_key,
+                                    "worklog_comment": worklog_comment,
+                                    "duration_minutes": duration_minutes,
+                                    "status": "failed",
+                                    "error": "Update failed",
+                                }
+                            )
 
             except Exception as e:
                 logger.error(f"Failed to sync worklog: {e}")
