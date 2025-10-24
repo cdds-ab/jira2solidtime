@@ -10,13 +10,16 @@ Minimal daemon for synchronizing time tracking data from Jira Tempo to Solidtime
 
 ## Features
 
-- 🔄 Intelligent worklog synchronization between Jira Tempo and Solidtime
-- 🕐 Scheduled synchronization with configurable cron expressions
-- 🌐 Simple web UI for configuration and sync history
-- 📊 Persistent history tracking with SQLite
-- 🔐 Security-first approach with no hardcoded credentials
-- 🐳 Minimal Docker deployment (~50MB image)
-- ⚡ Simple, maintainable codebase (~800 lines)
+- 🔄 **Intelligent Synchronization**: CREATE/UPDATE/DELETE operations with change detection
+- 📝 **Rich Descriptions**: Includes Jira issue summaries and worklog comments
+- 🔍 **Deduplication**: Prevents duplicate entries with persistent mapping
+- 🛡️ **Recovery**: Automatically recreates manually deleted entries (404 detection)
+- 🕐 **Scheduled Sync**: Configurable cron expressions for automatic syncing
+- 🌐 **Web UI**: Simple dashboard for configuration and sync history
+- 📊 **History Tracking**: SQLite database for persistent sync history
+- 🔐 **Security-First**: No hardcoded credentials, security scanning with pre-commit hooks
+- 🐳 **Docker Ready**: Minimal deployment (~50MB image)
+- ⚡ **Simple Codebase**: Maintainable architecture (~800 lines)
 
 ## Quick Start
 
@@ -117,6 +120,37 @@ The dashboard provides:
 - **Sync History**: Last 50 syncs with status, duration, and entry counts
 - **Statistics**: Total syncs, success rate, time entries created
 - **Manual Sync**: Trigger sync immediately
+
+## How It Works
+
+### Sync Process
+
+1. **Fetch Worklogs**: Retrieves worklogs from Tempo API for configured time range
+2. **Enrich Data**: Fetches Jira issue summaries (with caching to reduce API calls)
+3. **Build Descriptions**: Creates formatted descriptions: `ISSUE-KEY: Summary - Comment`
+4. **Intelligent Sync**:
+   - **CREATE**: New worklogs are created in Solidtime
+   - **UPDATE**: Changed worklogs are updated (duration, description, or date changed)
+   - **DELETE**: Worklogs removed from Tempo are deleted from Solidtime
+   - **SKIP**: Unchanged entries are left alone (after existence check)
+5. **Track Mappings**: Maintains persistent mapping between Tempo and Solidtime entry IDs
+6. **Recovery**: Detects manually deleted entries (404) and recreates them automatically
+
+### Change Detection
+
+The sync only updates entries when:
+- Duration has changed
+- Description has changed (issue summary or worklog comment)
+- Date/time has changed
+
+Unchanged entries are skipped to minimize API calls, but existence is still verified via UPDATE to detect manual deletions.
+
+### Deduplication
+
+Each Tempo worklog ID is mapped to its corresponding Solidtime time entry ID in `data/worklog_mapping.json`. This ensures:
+- No duplicate entries are created
+- Updates target the correct entry
+- Deleted worklogs can be cleaned up
 
 ## Development
 
