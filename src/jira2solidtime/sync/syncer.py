@@ -208,7 +208,8 @@ class Syncer:
                             }
                         )
                 else:
-                    # UPDATE: Check if data actually changed before updating
+                    # UPDATE: Check if data changed (for logging/tracking only)
+                    # We ALWAYS try UPDATE to detect 404 (deleted entries)
                     has_changes = self.mapping.has_changes(
                         tempo_worklog_id=tempo_worklog_id,
                         duration_minutes=duration_minutes,
@@ -216,16 +217,12 @@ class Syncer:
                         date_str=date_str,
                     )
 
-                    if not has_changes:
-                        # No changes - skip UPDATE
-                        self.mapping.mark_processed(tempo_worklog_id)
-                        logger.debug(f"Skipped {issue_key}: no changes")
-                        continue
-
-                    # Changes detected - proceed with UPDATE
+                    # Always try UPDATE (to detect deleted entries via 404)
                     # Note: We can't use GET to check existence (403 Forbidden)
-                    # Instead, we try UPDATE and handle 404 if entry was deleted
-                    logger.debug(f"Attempting UPDATE for entry {entry_id} (changes detected)")
+                    logger.debug(
+                        f"Attempting UPDATE for entry {entry_id} "
+                        f"({'changes detected' if has_changes else 'no changes, checking existence'})"
+                    )
 
                     try:
                         update_result = self.solidtime_client.update_time_entry(
@@ -236,25 +233,31 @@ class Syncer:
                         )
 
                         if update_result and update_result.get("data"):
-                            # UPDATE succeeded - update mapping with new data
-                            updated += 1
+                            # UPDATE succeeded
                             self.mapping.mark_processed(tempo_worklog_id)
-                            self.mapping.update_sync_data(
-                                tempo_worklog_id=tempo_worklog_id,
-                                duration_minutes=duration_minutes,
-                                description=description,
-                                date_str=date_str,
-                            )
-                            actions.append(
-                                {
-                                    "action": "UPDATE",
-                                    "issue_key": issue_key,
-                                    "worklog_comment": worklog_comment,
-                                    "duration_minutes": duration_minutes,
-                                    "status": "success",
-                                }
-                            )
-                            logger.debug(f"Updated entry for {issue_key}: {duration_minutes}m")
+
+                            if has_changes:
+                                # Data changed - update tracking and log
+                                updated += 1
+                                self.mapping.update_sync_data(
+                                    tempo_worklog_id=tempo_worklog_id,
+                                    duration_minutes=duration_minutes,
+                                    description=description,
+                                    date_str=date_str,
+                                )
+                                actions.append(
+                                    {
+                                        "action": "UPDATE",
+                                        "issue_key": issue_key,
+                                        "worklog_comment": worklog_comment,
+                                        "duration_minutes": duration_minutes,
+                                        "status": "success",
+                                    }
+                                )
+                                logger.debug(f"Updated entry for {issue_key}: {duration_minutes}m")
+                            else:
+                                # No changes - UPDATE was just existence check
+                                logger.debug(f"No changes for {issue_key}, entry still exists")
                         else:
                             # UPDATE returned None (404) - entry was deleted manually
                             logger.info(
