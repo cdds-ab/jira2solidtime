@@ -75,6 +75,9 @@ class WorklogMapping:
         tempo_worklog_id: str,
         solidtime_entry_id: str,
         issue_key: str,
+        duration_minutes: Optional[int] = None,
+        description: Optional[str] = None,
+        date: Optional[str] = None,
     ) -> None:
         """Record a mapping between Tempo worklog and Solidtime entry.
 
@@ -82,11 +85,17 @@ class WorklogMapping:
             tempo_worklog_id: Tempo worklog ID
             solidtime_entry_id: Solidtime time entry ID
             issue_key: Jira issue key for reference
+            duration_minutes: Last synced duration (for change detection)
+            description: Last synced description (for change detection)
+            date: Last synced date (for change detection)
         """
         self.mappings[str(tempo_worklog_id)] = {
             "solidtime_entry_id": solidtime_entry_id,
             "issue_key": issue_key,
             "created_at": datetime.now().isoformat(),
+            "last_duration": duration_minutes,
+            "last_description": description,
+            "last_date": date,
         }
         self._save()
         logger.debug(f"Mapped Tempo {tempo_worklog_id} -> Solidtime {solidtime_entry_id}")
@@ -149,3 +158,63 @@ class WorklogMapping:
             del self.mappings[str(tempo_worklog_id)]
             self._save()
             logger.debug(f"Removed mapping for Tempo {tempo_worklog_id}")
+
+    def has_changes(
+        self,
+        tempo_worklog_id: str,
+        duration_minutes: int,
+        description: str,
+        date_str: str,
+    ) -> bool:
+        """Check if worklog data has changed since last sync.
+
+        Args:
+            tempo_worklog_id: Tempo worklog ID
+            duration_minutes: Current duration in minutes
+            description: Current description
+            date_str: Current date as ISO string
+
+        Returns:
+            True if data changed or no previous sync data, False otherwise
+        """
+        mapping = self.mappings.get(str(tempo_worklog_id))
+        if not mapping:
+            return True  # No mapping = first sync = has changes
+
+        # Compare with last synced values
+        last_duration = mapping.get("last_duration")
+        last_description = mapping.get("last_description")
+        last_date = mapping.get("last_date")
+
+        # If any value is missing (old mapping format), assume changed
+        if last_duration is None or last_description is None or last_date is None:
+            return True
+
+        # Check if any field changed
+        return (
+            duration_minutes != last_duration
+            or description != last_description
+            or date_str != last_date
+        )
+
+    def update_sync_data(
+        self,
+        tempo_worklog_id: str,
+        duration_minutes: int,
+        description: str,
+        date_str: str,
+    ) -> None:
+        """Update last synced data for a worklog (after successful UPDATE).
+
+        Args:
+            tempo_worklog_id: Tempo worklog ID
+            duration_minutes: Current duration in minutes
+            description: Current description
+            date_str: Current date as ISO string
+        """
+        if str(tempo_worklog_id) in self.mappings:
+            self.mappings[str(tempo_worklog_id)]["last_duration"] = duration_minutes
+            self.mappings[str(tempo_worklog_id)]["last_description"] = description
+            self.mappings[str(tempo_worklog_id)]["last_date"] = date_str
+            self._save()
+            logger.debug(f"Updated sync data for Tempo {tempo_worklog_id}")

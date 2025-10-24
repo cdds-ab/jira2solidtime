@@ -158,6 +158,9 @@ class Syncer:
                 base_desc = f"{issue_key}: {issue_summary}" if issue_summary else issue_key
                 description = f"{base_desc} - {worklog_comment}" if worklog_comment else base_desc
 
+                # Prepare date string for change detection
+                date_str = work_date.strftime("%Y-%m-%dT%H:%M:%SZ")
+
                 # Check if already synced (CREATE vs UPDATE)
                 entry_id = self.mapping.get_solidtime_entry_id(tempo_worklog_id)
 
@@ -176,6 +179,9 @@ class Syncer:
                             tempo_worklog_id=str(tempo_worklog_id),
                             solidtime_entry_id=new_entry_id,
                             issue_key=issue_key,
+                            duration_minutes=duration_minutes,
+                            description=description,
+                            date=date_str,
                         )
                         created += 1
                         self.mapping.mark_processed(tempo_worklog_id)
@@ -202,10 +208,24 @@ class Syncer:
                             }
                         )
                 else:
-                    # UPDATE: Try to update existing entry
+                    # UPDATE: Check if data actually changed before updating
+                    has_changes = self.mapping.has_changes(
+                        tempo_worklog_id=tempo_worklog_id,
+                        duration_minutes=duration_minutes,
+                        description=description,
+                        date_str=date_str,
+                    )
+
+                    if not has_changes:
+                        # No changes - skip UPDATE
+                        self.mapping.mark_processed(tempo_worklog_id)
+                        logger.debug(f"Skipped {issue_key}: no changes")
+                        continue
+
+                    # Changes detected - proceed with UPDATE
                     # Note: We can't use GET to check existence (403 Forbidden)
                     # Instead, we try UPDATE and handle 404 if entry was deleted
-                    logger.debug(f"Attempting UPDATE for entry {entry_id}")
+                    logger.debug(f"Attempting UPDATE for entry {entry_id} (changes detected)")
 
                     try:
                         update_result = self.solidtime_client.update_time_entry(
@@ -216,9 +236,15 @@ class Syncer:
                         )
 
                         if update_result and update_result.get("data"):
-                            # UPDATE succeeded
+                            # UPDATE succeeded - update mapping with new data
                             updated += 1
                             self.mapping.mark_processed(tempo_worklog_id)
+                            self.mapping.update_sync_data(
+                                tempo_worklog_id=tempo_worklog_id,
+                                duration_minutes=duration_minutes,
+                                description=description,
+                                date_str=date_str,
+                            )
                             actions.append(
                                 {
                                     "action": "UPDATE",
@@ -250,6 +276,9 @@ class Syncer:
                                     tempo_worklog_id=str(tempo_worklog_id),
                                     solidtime_entry_id=new_entry_id,
                                     issue_key=issue_key,
+                                    duration_minutes=duration_minutes,
+                                    description=description,
+                                    date=date_str,
                                 )
                                 created += 1
                                 self.mapping.mark_processed(tempo_worklog_id)
