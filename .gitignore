@@ -57,9 +57,13 @@ temp_*.py
 temp_*.csv
 *_temp.*
 
-# Data files
-data/config.db
-data/history.db
+# Data files (all customer-specific data and databases)
+data/*.db
+data/*.sqlite
+data/*.sqlite3
+data/*.json
+data/*
+!data/.gitkeep
 
 # OS
 .DS_Store
@@ -69,4 +73,3 @@ data/history.db
 .Trashes
 ehthumbs.db
 Thumbs.db
-data/worklog_mapping.json

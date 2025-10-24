@@ -10,13 +10,15 @@ Only core functionality: sync, simple web UI for config + history, nothing else.
 - Update `pyproject.toml`, never create requirements.txt
 
 ## 💬 Git Workflow
-- **Commits**: Always use Conventional Commits format
+- **Commits**: ALWAYS use Conventional Commits format (REQUIRED!)
   - `feat: add new feature`
   - `fix: resolve bug`
   - `refactor: restructure code`
   - `docs: update documentation`
   - `chore: maintenance tasks`
   - Breaking changes: `feat!: breaking change`
+  - **IMPORTANT**: NO "Generated with Claude Code" footers or AI mentions in commit messages!
+  - Keep commit messages clean, professional, and focused on WHAT changed
 - **Branches**: Work directly on `main`/`master`, no feature branches
 - **Releases**: Semantic Versioning via release-please (automatic)
 
@@ -28,7 +30,14 @@ uv run ruff check --fix . # Lint + auto-fix
 uv run mypy .             # Type checking
 ```
 
-## 🛡️ Pre-commit Hooks
+## 🛡️ Security & Data Protection
+**CRITICAL**: Never commit customer-specific data!
+- **config.json**: NEVER commit (contains all secrets, tokens, customer mappings)
+- **data/ directory**: NEVER commit ANY files (databases, mappings, etc.)
+- **Hardcoded values**: NEVER hardcode organization IDs, URLs, tokens, mappings
+- **All customer data**: Must ONLY exist in config.json (gitignored)
+
+## 🔐 Pre-commit Hooks
 Security-first approach only:
 - `bandit` - Security vulnerability scanner
 - `detect-secrets` - Credential detection

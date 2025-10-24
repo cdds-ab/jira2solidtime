@@ -2,40 +2,31 @@
 """Debug the complete sync flow with Solidtime."""
 
 import json
-import os
 import sys
 from datetime import datetime, timedelta
-from typing import cast
 
 sys.path.insert(0, "src")
 
 from jira2solidtime.api.jira_client import JiraClient
 from jira2solidtime.api.solidtime_client import SolidtimeClient
 from jira2solidtime.api.tempo_client import TempoClient
+from jira2solidtime.config import Config
 from jira2solidtime.sync.mapper import Mapper
 
-SOLID_TOKEN = os.getenv("SOLID_TOKEN")
-TEMPO_TOKEN = os.getenv("TEMPO_TOKEN")
-JIRA_EMAIL = os.getenv("JIRA_EMAIL")
-JIRA_TOKEN = os.getenv("JIRA_TOKEN")
-
-if not all([SOLID_TOKEN, TEMPO_TOKEN, JIRA_EMAIL, JIRA_TOKEN]):
-    print("❌ Missing environment variables")
-    print("   Required: SOLID_TOKEN, TEMPO_TOKEN, JIRA_EMAIL, JIRA_TOKEN")
+# Load config from config.json (no hardcoded secrets!)
+try:
+    config = Config.from_file("config.json")
+except Exception as e:
+    print(f"❌ Failed to load config.json: {e}")
+    print("   Please ensure config.json exists with all required fields")
     sys.exit(1)
-
-# Type guard after checking (cast is safe here since we've validated)
-SOLID_TOKEN = cast(str, SOLID_TOKEN)
-TEMPO_TOKEN = cast(str, TEMPO_TOKEN)
-JIRA_EMAIL = cast(str, JIRA_EMAIL)
-JIRA_TOKEN = cast(str, JIRA_TOKEN)
 
 print("🔍 Debugging Complete Sync Flow")
 print("")
 
 # 1. Get Tempo worklogs
 print("1️⃣  Fetching Tempo worklogs...")
-tempo = TempoClient(api_token=TEMPO_TOKEN)
+tempo = TempoClient(api_token=config.tempo["api_token"])
 to_date = datetime.now()
 from_date = to_date - timedelta(days=30)
 worklogs = tempo.get_worklogs(from_date, to_date)
@@ -51,7 +42,11 @@ print("")
 
 # 2. Get Jira issue
 print("2️⃣  Fetching Jira issue...")
-jira = JiraClient(base_url="https://cdds.atlassian.net", email=JIRA_EMAIL, api_token=JIRA_TOKEN)
+jira = JiraClient(
+    base_url=config.jira["base_url"],
+    email=config.jira["user_email"],
+    api_token=config.jira["api_token"],
+)
 issue_id = worklog.get("issue", {}).get("id")
 jira_issue = jira.get_issue(str(issue_id))
 issue_key = jira_issue.get("key")
@@ -64,15 +59,15 @@ print("")
 # 3. Get Solidtime projects and build payload
 print("3️⃣  Building Solidtime payload...")
 solidtime = SolidtimeClient(
-    base_url="https://solidtime.grossweber.com",
-    api_token=SOLID_TOKEN,
-    organization_id="c0cd7d90-5465-4ef8-8d5f-4e32fad400bf",
+    base_url=config.solidtime["base_url"],
+    api_token=config.solidtime["api_token"],
+    organization_id=config.solidtime["organization_id"],
 )
 
 projects = solidtime.get_projects()
 print(f"✅ Found {len(projects)} project(s)")
 
-mapper = Mapper({"AS": "Beratung (CI/CD, DevOps)"})
+mapper = Mapper(config.mappings)
 project_key = issue_key.split("-")[0]
 project_name = mapper.map_project(project_key)
 print(f"   Mapped {project_key} -> {project_name}")
