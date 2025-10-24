@@ -3,9 +3,8 @@ set -e
 
 echo "🔨 Rebuilding jira2solidtime..."
 
-# Export host UID/GID for docker-compose.override.yml
-export UID=$(id -u)
-export GID=$(id -g)
+# Note: UID and GID are already available as shell variables
+# docker-compose.override.yml will use them automatically
 
 # Stop and remove old containers
 echo "⏹️  Stopping containers..."
