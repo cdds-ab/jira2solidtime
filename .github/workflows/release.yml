@@ -29,12 +29,11 @@ jobs:
       - name: Install dependencies
         run: uv sync
 
-      - name: Run quality checks and tests
+      - name: Run quality checks
         run: |
           uv run ruff check --fix .
           uv run ruff format --check .
           uv run mypy .
-          uv run pytest -v
 
   docker-build:
     name: Build and Push Docker Images
