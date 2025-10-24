@@ -185,27 +185,6 @@ class SolidtimeClient:
 
         return result
 
-    def get_time_entry(self, entry_id: str) -> Optional[dict[str, Any]]:
-        """Get a time entry by ID.
-
-        Args:
-            entry_id: Solidtime time entry ID
-
-        Returns:
-            Time entry data, or None if not found
-        """
-        endpoint = f"/organizations/{self.organization_id}/time-entries/{entry_id}"
-        try:
-            response = self._make_request("GET", endpoint)
-            return response.json()
-        except Exception as e:
-            # Entry not found (404) or other error
-            if "404" in str(e) or "not found" in str(e).lower():
-                return None
-            # Re-raise other errors
-            logger.error(f"Failed to get time entry {entry_id}: {e}")
-            raise
-
     def update_time_entry(
         self,
         entry_id: str,

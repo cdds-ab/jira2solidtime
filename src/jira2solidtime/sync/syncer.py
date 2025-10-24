@@ -202,69 +202,17 @@ class Syncer:
                             }
                         )
                 else:
-                    # UPDATE: First check if entry still exists in Solidtime
-                    logger.debug(
-                        f"Checking if entry {entry_id} exists (tempo_id={tempo_worklog_id})"
-                    )
-                    entry_exists = self.solidtime_client.get_time_entry(entry_id)
+                    # UPDATE: Try to update existing entry
+                    # Note: We can't use GET to check existence (403 Forbidden)
+                    # Instead, we try UPDATE and handle 404 if entry was deleted
+                    logger.debug(f"Attempting UPDATE for entry {entry_id}")
 
-                    if not entry_exists:
-                        # Entry was deleted in Solidtime - remove mapping and create new
-                        logger.info(
-                            f"Entry {entry_id} not found in Solidtime, removing mapping and creating new"
-                        )
-                        self.mapping.remove_mapping(tempo_worklog_id)
-
-                        # CREATE as new entry
-                        create_result = self.solidtime_client.create_time_entry(
-                            project_id=project_id,
+                    try:
+                        update_result = self.solidtime_client.update_time_entry(
+                            entry_id=entry_id,
                             duration_minutes=duration_minutes,
                             date=work_date,
                             description=description,
-                        )
-
-                        new_entry_id = create_result.get("data", {}).get("id")
-                        if new_entry_id:
-                            self.mapping.add_mapping(
-                                tempo_worklog_id=str(tempo_worklog_id),
-                                solidtime_entry_id=new_entry_id,
-                                issue_key=issue_key,
-                            )
-                            created += 1
-                            self.mapping.mark_processed(tempo_worklog_id)
-                            actions.append(
-                                {
-                                    "action": "CREATE",
-                                    "issue_key": issue_key,
-                                    "worklog_comment": worklog_comment,
-                                    "duration_minutes": duration_minutes,
-                                    "status": "success",
-                                    "reason": "Recovered after manual delete",
-                                }
-                            )
-                            logger.debug(f"Recovered entry for {issue_key}: {duration_minutes}m")
-                        else:
-                            failed += 1
-                            actions.append(
-                                {
-                                    "action": "RECOVER",
-                                    "issue_key": issue_key,
-                                    "worklog_comment": worklog_comment,
-                                    "duration_minutes": duration_minutes,
-                                    "status": "failed",
-                                    "error": "Recovery failed - no entry ID",
-                                }
-                            )
-                    else:
-                        # Entry exists - proceed with UPDATE
-                        logger.debug(f"Updating existing entry {entry_id}")
-                        update_result: Optional[dict[str, Any]] = (
-                            self.solidtime_client.update_time_entry(
-                                entry_id=entry_id,
-                                duration_minutes=duration_minutes,
-                                date=work_date,
-                                description=description,
-                            )
                         )
 
                         if update_result and update_result.get("data"):
@@ -282,18 +230,68 @@ class Syncer:
                             )
                             logger.debug(f"Updated entry for {issue_key}: {duration_minutes}m")
                         else:
-                            # UPDATE failed for other reason
-                            failed += 1
-                            actions.append(
-                                {
-                                    "action": "UPDATE",
-                                    "issue_key": issue_key,
-                                    "worklog_comment": worklog_comment,
-                                    "duration_minutes": duration_minutes,
-                                    "status": "failed",
-                                    "error": "Update failed",
-                                }
+                            # UPDATE returned None (404) - entry was deleted manually
+                            logger.info(
+                                f"Entry {entry_id} not found (404), removing mapping and creating new"
                             )
+                            self.mapping.remove_mapping(tempo_worklog_id)
+
+                            # CREATE as new entry
+                            create_result = self.solidtime_client.create_time_entry(
+                                project_id=project_id,
+                                duration_minutes=duration_minutes,
+                                date=work_date,
+                                description=description,
+                            )
+
+                            new_entry_id = create_result.get("data", {}).get("id")
+                            if new_entry_id:
+                                self.mapping.add_mapping(
+                                    tempo_worklog_id=str(tempo_worklog_id),
+                                    solidtime_entry_id=new_entry_id,
+                                    issue_key=issue_key,
+                                )
+                                created += 1
+                                self.mapping.mark_processed(tempo_worklog_id)
+                                actions.append(
+                                    {
+                                        "action": "CREATE",
+                                        "issue_key": issue_key,
+                                        "worklog_comment": worklog_comment,
+                                        "duration_minutes": duration_minutes,
+                                        "status": "success",
+                                        "reason": "Recovered after manual delete",
+                                    }
+                                )
+                                logger.debug(
+                                    f"Recovered entry for {issue_key}: {duration_minutes}m"
+                                )
+                            else:
+                                failed += 1
+                                actions.append(
+                                    {
+                                        "action": "RECOVER",
+                                        "issue_key": issue_key,
+                                        "worklog_comment": worklog_comment,
+                                        "duration_minutes": duration_minutes,
+                                        "status": "failed",
+                                        "error": "Recovery failed - no entry ID",
+                                    }
+                                )
+                    except Exception as e:
+                        # Unexpected error during UPDATE
+                        logger.error(f"UPDATE failed with exception: {e}")
+                        failed += 1
+                        actions.append(
+                            {
+                                "action": "UPDATE",
+                                "issue_key": issue_key,
+                                "worklog_comment": worklog_comment,
+                                "duration_minutes": duration_minutes,
+                                "status": "failed",
+                                "error": str(e),
+                            }
+                        )
 
             except Exception as e:
                 logger.error(f"Failed to sync worklog: {e}")
