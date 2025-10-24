@@ -18,8 +18,14 @@ RUN useradd -m -u 1000 appuser && \
     mkdir -p data && \
     chown -R appuser:appuser /app
 
+# Copy and setup entrypoint
+COPY docker-entrypoint.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+
 # Switch to non-root user
 USER appuser
+
+ENTRYPOINT ["docker-entrypoint.sh"]
 
 # Health check for container monitoring
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
@@ -29,4 +35,4 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
 EXPOSE 8080
 
 # Run the application
-CMD ["uv", "run", "src/jira2solidtime/main.py"]
+CMD ["uv", "run", "python", "-m", "jira2solidtime.main"]
