@@ -178,7 +178,12 @@ class SolidtimeClient:
 
         endpoint = f"/organizations/{self.organization_id}/time-entries"
         response = self._make_request("POST", endpoint, json=payload)
-        return response.json()
+        result = response.json()
+
+        # Debug: Log full response to understand structure
+        logger.debug(f"CREATE response: {result}")
+
+        return result
 
     def get_time_entry(self, entry_id: str) -> Optional[dict[str, Any]]:
         """Get a time entry by ID.
