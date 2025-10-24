@@ -2,7 +2,8 @@
 .env
 .env.local
 .env.*.local
-config.json  # Never commit credentials - use config.json.example as template
+# Never commit config.json - contains all secrets and customer data
+config.json
 
 # Python
 __pycache__/
@@ -73,3 +74,5 @@ data/*
 .Trashes
 ehthumbs.db
 Thumbs.db
+
+
