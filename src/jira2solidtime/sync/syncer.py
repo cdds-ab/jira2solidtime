@@ -150,11 +150,13 @@ class Syncer:
                 start_date_str = worklog.get("startDate", "")
                 start_time_str = worklog.get("startTime", "08:00:00")
                 work_date = datetime.fromisoformat(f"{start_date_str}T{start_time_str}")
-                comment = worklog.get("comment", "")
+
+                # Tempo uses "description" field for worklog comments, not "comment"
+                worklog_comment = worklog.get("description", "")
 
                 # Build description: "ISSUE-KEY: Summary" or "ISSUE-KEY: Summary - comment"
                 base_desc = f"{issue_key}: {issue_summary}" if issue_summary else issue_key
-                description = f"{base_desc} - {comment}" if comment else base_desc
+                description = f"{base_desc} - {worklog_comment}" if worklog_comment else base_desc
 
                 # Check if already synced (CREATE vs UPDATE)
                 entry_id = self.mapping.get_solidtime_entry_id(tempo_worklog_id)
@@ -181,7 +183,7 @@ class Syncer:
                             {
                                 "action": "CREATE",
                                 "issue_key": issue_key,
-                                "worklog_comment": comment,
+                                "worklog_comment": worklog_comment,
                                 "duration_minutes": duration_minutes,
                                 "status": "success",
                             }
@@ -193,7 +195,7 @@ class Syncer:
                             {
                                 "action": "CREATE",
                                 "issue_key": issue_key,
-                                "worklog_comment": comment,
+                                "worklog_comment": worklog_comment,
                                 "duration_minutes": duration_minutes,
                                 "status": "failed",
                                 "error": "No entry ID in response",
@@ -218,7 +220,7 @@ class Syncer:
                             {
                                 "action": "UPDATE",
                                 "issue_key": issue_key,
-                                "worklog_comment": comment,
+                                "worklog_comment": worklog_comment,
                                 "duration_minutes": duration_minutes,
                                 "status": "success",
                             }
@@ -253,7 +255,7 @@ class Syncer:
                                 {
                                     "action": "CREATE",
                                     "issue_key": issue_key,
-                                    "worklog_comment": comment,
+                                    "worklog_comment": worklog_comment,
                                     "duration_minutes": duration_minutes,
                                     "status": "success",
                                     "reason": "Recovered after manual delete",
@@ -266,7 +268,7 @@ class Syncer:
                                 {
                                     "action": "RECOVER",
                                     "issue_key": issue_key,
-                                    "worklog_comment": comment,
+                                    "worklog_comment": worklog_comment,
                                     "duration_minutes": duration_minutes,
                                     "status": "failed",
                                     "error": "Recovery failed",
@@ -279,7 +281,7 @@ class Syncer:
                             {
                                 "action": "UPDATE",
                                 "issue_key": issue_key,
-                                "worklog_comment": comment,
+                                "worklog_comment": worklog_comment,
                                 "duration_minutes": duration_minutes,
                                 "status": "failed",
                                 "error": "Update failed",
