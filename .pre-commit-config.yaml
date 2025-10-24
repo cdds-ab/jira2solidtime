@@ -1,0 +1,16 @@
+# Pre-commit hooks - Security-first approach only
+# Keep it simple: only security checks, no linting/formatting
+repos:
+  - repo: https://github.com/PyCQA/bandit
+    rev: 1.7.10
+    hooks:
+      - id: bandit
+        args: ["-c", "pyproject.toml"]
+        additional_dependencies: ["bandit[toml]"]
+
+  - repo: https://github.com/Yelp/detect-secrets
+    rev: v1.5.0
+    hooks:
+      - id: detect-secrets
+        args: ['--baseline', '.secrets.baseline']
+        exclude: package.lock.json
