@@ -15,7 +15,7 @@ from jira2solidtime.sync.mapper import Mapper
 
 # Load config from config.json (no hardcoded secrets!)
 try:
-    config = Config.from_file("config.json")
+    config = Config("config.json")
 except Exception as e:
     print(f"❌ Failed to load config.json: {e}")
     print("   Please ensure config.json exists with all required fields")

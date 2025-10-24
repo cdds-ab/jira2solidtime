@@ -38,10 +38,14 @@ uv run mypy .             # Type checking
 - **All customer data**: Must ONLY exist in config.json (gitignored)
 
 ## 🔐 Pre-commit Hooks
-Security-first approach only:
+Pre-commit hooks match CI/CD pipeline exactly to catch issues locally:
+- `ruff` - Linting and auto-fixing
+- `ruff-format` - Code formatting
+- `mypy` - Type checking
 - `bandit` - Security vulnerability scanner
 - `detect-secrets` - Credential detection
-NO other hooks. Keep it simple.
+
+**Important**: Same versions as CI to prevent surprises!
 
 ## 🏗️ Architecture Principles
 - **Simplicity First**: No unnecessary abstractions

@@ -1,6 +1,23 @@
-# Pre-commit hooks - Security-first approach only
-# Keep it simple: only security checks, no linting/formatting
+# Pre-commit hooks - Match CI/CD pipeline exactly
+# Catches issues locally before they fail in CI
 repos:
+  # Code quality & formatting
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.8.4
+    hooks:
+      - id: ruff
+        args: [--fix]
+      - id: ruff-format
+
+  # Type checking
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.13.0
+    hooks:
+      - id: mypy
+        additional_dependencies:
+          - types-requests>=2.31.0.0
+
+  # Security scanning
   - repo: https://github.com/PyCQA/bandit
     rev: 1.7.10
     hooks:
@@ -8,6 +25,7 @@ repos:
         args: ["-c", "pyproject.toml"]
         additional_dependencies: ["bandit[toml]"]
 
+  # Secret detection
   - repo: https://github.com/Yelp/detect-secrets
     rev: v1.5.0
     hooks:
