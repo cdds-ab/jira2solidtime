@@ -80,6 +80,9 @@ class Syncer:
         deleted = 0
         failed = 0
 
+        # Cache for issue summaries to reduce API calls
+        issue_cache: dict[str, str] = {}
+
         # Phase 1: CREATE and UPDATE
         for worklog in worklogs:
             try:
@@ -89,20 +92,37 @@ class Syncer:
                     logger.warning("Worklog missing tempoWorklogId, skipping")
                     continue
 
-                # Get basic info for error messages
+                # Get basic info from worklog
                 issue = worklog.get("issue", {})
                 issue_id = issue.get("id")
                 issue_key = issue.get("key")
 
-                # Fetch full issue if key not in worklog
-                if not issue_key and issue_id:
-                    try:
-                        jira_issue = self.jira_client.get_issue(str(issue_id))
-                        issue_key = jira_issue.get("key")
-                    except Exception as e:
-                        logger.warning(f"Could not fetch issue {issue_id}: {e}")
-                        failed += 1
-                        continue
+                # Always fetch full issue to get summary (with caching)
+                issue_summary = ""
+                if issue_id:
+                    issue_id_str = str(issue_id)
+
+                    # Check cache first
+                    if issue_id_str in issue_cache:
+                        issue_summary = issue_cache[issue_id_str]
+                        # Use cached issue_key if we don't have one
+                        if not issue_key:
+                            # Issue key format: extract from cached data or construct
+                            # For now, we need to fetch if key is missing
+                            pass
+
+                    # Fetch from Jira if not cached or key missing
+                    if not issue_key or issue_id_str not in issue_cache:
+                        try:
+                            jira_issue = self.jira_client.get_issue(issue_id_str)
+                            issue_key = jira_issue.get("key", issue_key)
+                            issue_summary = jira_issue.get("fields", {}).get("summary", "")
+                            # Cache the summary
+                            issue_cache[issue_id_str] = issue_summary
+                        except Exception as e:
+                            logger.warning(f"Could not fetch issue {issue_id}: {e}")
+                            failed += 1
+                            continue
 
                 if not issue_key:
                     logger.warning(f"No issue key for worklog {tempo_worklog_id}")
@@ -131,8 +151,10 @@ class Syncer:
                 start_time_str = worklog.get("startTime", "08:00:00")
                 work_date = datetime.fromisoformat(f"{start_date_str}T{start_time_str}")
                 comment = worklog.get("comment", "")
-                # Clean description without tracking tags
-                description = f"{issue_key}: {comment}".strip() if comment else issue_key
+
+                # Build description: "ISSUE-KEY: Summary" or "ISSUE-KEY: Summary - comment"
+                base_desc = f"{issue_key}: {issue_summary}" if issue_summary else issue_key
+                description = f"{base_desc} - {comment}" if comment else base_desc
 
                 # Check if already synced (CREATE vs UPDATE)
                 entry_id = self.mapping.get_solidtime_entry_id(tempo_worklog_id)
