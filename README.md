@@ -64,6 +64,49 @@ cp config.json.example config.json
 uv run src/jira2solidtime/main.py
 ```
 
+## Deployment
+
+### Local Development
+
+For local testing and development, use Docker Compose:
+
+```bash
+docker-compose up -d
+```
+
+For production-ready local deployment with health checks, logging, and restart policies, see the [Local Deployment Guide](docs/deployment-local.md).
+
+### Production Deployment
+
+#### Azure App Service
+
+Deploy as a managed web app with auto-scaling, SSL, and monitoring:
+
+**Quick deploy with Azure CLI:**
+```bash
+# Create web app
+az webapp create \
+  --resource-group rg-jira2solidtime \
+  --plan plan-jira2solidtime \
+  --name jira2solidtime-app \
+  --deployment-container-image-name cddsab/jira2solidtime:0.1.0
+
+# Configure app
+az webapp config appsettings set \
+  --resource-group rg-jira2solidtime \
+  --name jira2solidtime-app \
+  --settings WEBSITES_PORT=8080
+```
+
+**Infrastructure as Code with Terraform:**
+
+See the [Azure Deployment Guide](docs/deployment-azure.md) for complete setup with both Azure CLI and Terraform examples.
+
+#### Cost Estimation
+
+- **Local (Docker Compose)**: Free (own hardware)
+- **Azure App Service (B1)**: ~12€/month
+
 ## Configuration
 
 Configuration uses a single `config.json` file:

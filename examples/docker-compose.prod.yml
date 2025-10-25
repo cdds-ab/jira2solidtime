@@ -1,0 +1,29 @@
+version: '3.8'
+
+services:
+  app:
+    image: cddsab/jira2solidtime:0.1.0
+    container_name: jira2solidtime
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./config.json:/app/config.json:ro
+      - app-data:/app/data
+    environment:
+      - TZ=Europe/Berlin
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  app-data:
+    driver: local
