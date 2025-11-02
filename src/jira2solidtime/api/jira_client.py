@@ -82,7 +82,9 @@ class JiraClient:
     def get_issues_by_ids(
         self, issue_ids: list[str], fields: list[str] | None = None
     ) -> dict[str, dict[str, Any]]:
-        """Batch fetch multiple issues by IDs using JQL.
+        """Batch fetch multiple issues by IDs using enhanced JQL search.
+
+        Tries new enhanced search API first, falls back to legacy v2 if unavailable.
 
         Args:
             issue_ids: List of issue IDs (e.g., ['10386', '10387'])
@@ -94,31 +96,96 @@ class JiraClient:
         if not issue_ids:
             return {}
 
-        # Build JQL: id IN (10386, 10387, ...)
         ids_str = ",".join(issue_ids)
         jql = f"id IN ({ids_str})"
 
-        params: dict[str, Any] = {"jql": jql, "maxResults": 1000}
+        # Try enhanced search API first (v3/search/jql)
+        try:
+            return self._fetch_with_enhanced_search(jql, fields, len(issue_ids))
+        except requests.RequestException as e:
+            # Fallback to legacy API on 404/410 (older Jira instances)
+            if hasattr(e, "response") and e.response is not None:
+                status_code = e.response.status_code
+                if status_code in [404, 410]:
+                    logger.warning(
+                        f"Enhanced search unavailable ({status_code}), falling back to legacy API"
+                    )
+                    try:
+                        return self._fetch_with_legacy_search(jql, fields, len(issue_ids))
+                    except Exception as legacy_error:
+                        logger.error(f"Legacy search also failed: {legacy_error}")
+                        return {}
+            logger.error(f"Batch fetch failed: {e}")
+            return {}
+
+    def _fetch_with_enhanced_search(
+        self, jql: str, fields: list[str] | None, max_results: int
+    ) -> dict[str, dict[str, Any]]:
+        """Use new enhanced search API: POST /rest/api/3/search/jql.
+
+        Args:
+            jql: JQL query string
+            fields: Fields to fetch
+            max_results: Maximum number of results
+
+        Returns:
+            Dictionary mapping issue ID to issue data
+        """
+        url = f"{self.base_url}/rest/api/3/search/jql"
+        auth = (self.email, self.api_token)
+
+        payload: dict[str, Any] = {
+            "jql": jql,
+            "maxResults": min(max_results, 1000),
+            "fieldsByKeys": False,
+        }
+
+        if fields:
+            payload["fields"] = fields
+
+        response = requests.post(url, json=payload, headers=self.headers, auth=auth, timeout=30)
+        response.raise_for_status()
+
+        data = response.json()
+        issues = data.get("issues", [])
+
+        # Build dict: issue_id -> issue data
+        result = {}
+        for issue in issues:
+            issue_id = str(issue.get("id"))
+            result[issue_id] = issue
+
+        logger.debug(f"Enhanced search fetched {len(result)} issues")
+        return result
+
+    def _fetch_with_legacy_search(
+        self, jql: str, fields: list[str] | None, max_results: int
+    ) -> dict[str, dict[str, Any]]:
+        """Fallback to legacy search: GET /rest/api/2/search.
+
+        Args:
+            jql: JQL query string
+            fields: Fields to fetch
+            max_results: Maximum number of results
+
+        Returns:
+            Dictionary mapping issue ID to issue data
+        """
+        params: dict[str, Any] = {"jql": jql, "maxResults": min(max_results, 1000)}
         if fields:
             params["fields"] = ",".join(fields)
 
-        try:
-            response = self._make_request("GET", "/search", params=params)
-            data = response.json()
-            issues = data.get("issues", [])
+        response = self._make_request("GET", "/search", params=params)
+        data = response.json()
+        issues = data.get("issues", [])
 
-            # Build dict: issue_id -> issue data
-            result = {}
-            for issue in issues:
-                issue_id = str(issue.get("id"))
-                result[issue_id] = issue
+        result = {}
+        for issue in issues:
+            issue_id = str(issue.get("id"))
+            result[issue_id] = issue
 
-            logger.debug(f"Batch fetched {len(result)} issues from {len(issue_ids)} requested")
-            return result
-
-        except Exception as e:
-            logger.error(f"Batch fetch failed: {e}")
-            return {}
+        logger.debug(f"Legacy search fetched {len(result)} issues")
+        return result
 
     def test_connection(self) -> bool:
         """Test if API connection works.
