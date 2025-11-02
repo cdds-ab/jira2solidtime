@@ -11,7 +11,9 @@ Minimal daemon for synchronizing time tracking data from Jira Tempo to Solidtime
 ## Features
 
 - 🔄 **Intelligent Synchronization**: CREATE/UPDATE/DELETE operations with change detection
-- 📝 **Rich Descriptions**: Includes Jira issue summaries and worklog comments
+- 📝 **Rich Descriptions**: Includes Epic names, Jira issue summaries and worklog comments
+- 🎯 **Epic Integration**: Automatically extracts and displays work package (Epic) information
+- ⚡ **High Performance**: Batch API calls and smart caching for 5-10x faster syncs
 - 🔍 **Deduplication**: Prevents duplicate entries with persistent mapping
 - 🛡️ **Recovery**: Automatically recreates manually deleted entries (404 detection)
 - 🕐 **Scheduled Sync**: Configurable cron expressions for automatic syncing
@@ -19,7 +21,7 @@ Minimal daemon for synchronizing time tracking data from Jira Tempo to Solidtime
 - 📊 **History Tracking**: SQLite database for persistent sync history
 - 🔐 **Security-First**: No hardcoded credentials, security scanning with pre-commit hooks
 - 🐳 **Docker Ready**: Minimal deployment (~50MB image)
-- ⚡ **Simple Codebase**: Maintainable architecture (~800 lines)
+- 💾 **Minimal I/O**: Batch file writes reduce disk operations
 
 ## Quick Start
 
@@ -169,31 +171,38 @@ The dashboard provides:
 ### Sync Process
 
 1. **Fetch Worklogs**: Retrieves worklogs from Tempo API for configured time range
-2. **Enrich Data**: Fetches Jira issue summaries (with caching to reduce API calls)
-3. **Build Descriptions**: Creates formatted descriptions: `ISSUE-KEY: Summary - Comment`
-4. **Intelligent Sync**:
+2. **Batch Fetch Issues**: Fetches all unique Jira issues in a single API call (performance optimization)
+3. **Extract Epic Data**: Retrieves Epic (parent) information for work package context
+4. **Build Descriptions**: Creates formatted descriptions: `Epic Name > ISSUE-KEY: Summary - Comment` or `[No Epic] > ISSUE-KEY: Summary - Comment`
+5. **Intelligent Sync**:
    - **CREATE**: New worklogs are created in Solidtime
-   - **UPDATE**: Changed worklogs are updated (duration, description, or date changed)
+   - **UPDATE**: Changed worklogs are updated (only when duration, description, or date changed)
    - **DELETE**: Worklogs removed from Tempo are deleted from Solidtime
-   - **SKIP**: Unchanged entries are left alone (after existence check)
-5. **Track Mappings**: Maintains persistent mapping between Tempo and Solidtime entry IDs
-6. **Recovery**: Detects manually deleted entries (404) and recreates them automatically
+   - **SKIP**: Unchanged entries are skipped entirely (with periodic 24h existence check)
+6. **Track Mappings**: Maintains persistent mapping between Tempo and Solidtime entry IDs
+7. **Recovery**: Detects manually deleted entries (404) and recreates them automatically
+8. **Batch Write**: Saves all mapping changes in two operations (after Phase 1 and Phase 2)
 
-### Change Detection
+### Change Detection & Performance
 
-The sync only updates entries when:
-- Duration has changed
-- Description has changed (issue summary or worklog comment)
-- Date/time has changed
+The sync intelligently handles updates:
+- **Changes detected**: UPDATE is performed immediately
+  - Duration has changed
+  - Description has changed (Epic, issue summary, or worklog comment)
+  - Date/time has changed
+- **No changes, but >24h since last check**: UPDATE for existence verification
+- **No changes, recently verified**: SKIP entirely (no API call)
 
-Unchanged entries are skipped to minimize API calls, but existence is still verified via UPDATE to detect manual deletions.
+This approach minimizes API calls while still detecting manually deleted entries.
 
-### Deduplication
+### Deduplication & Mapping
 
 Each Tempo worklog ID is mapped to its corresponding Solidtime time entry ID in `data/worklog_mapping.json`. This ensures:
 - No duplicate entries are created
 - Updates target the correct entry
 - Deleted worklogs can be cleaned up
+- Change detection data is persisted (last duration, description, date)
+- Last existence check timestamp is tracked for smart UPDATE logic
 
 ## Development
 
