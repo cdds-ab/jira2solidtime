@@ -80,8 +80,49 @@ class Syncer:
         deleted = 0
         failed = 0
 
-        # Cache for issue summaries to reduce API calls
-        issue_cache: dict[str, str] = {}
+        # Cache for issue data (summary + Epic) to reduce API calls
+        # Structure: {issue_id: {key, summary, epic_name}}
+        issue_cache: dict[str, dict[str, Any]] = {}
+
+        # Pre-fetch all unique issues in batch (performance optimization)
+        logger.info("Pre-fetching issue data in batch...")
+        unique_issue_ids = set()
+        for worklog in worklogs:
+            issue = worklog.get("issue", {})
+            issue_id = issue.get("id")
+            if issue_id:
+                unique_issue_ids.add(str(issue_id))
+
+        if unique_issue_ids:
+            # Batch fetch with parent field for Epic support
+            batch_issues = self.jira_client.get_issues_by_ids(
+                list(unique_issue_ids), fields=["summary", "parent"]
+            )
+
+            # Build cache with Epic data
+            for issue_id, issue_data in batch_issues.items():
+                fields = issue_data.get("fields", {})
+                issue_key = issue_data.get("key", "")
+                issue_summary = fields.get("summary", "")
+
+                # Extract Epic name from parent field
+                epic_name = None
+                parent = fields.get("parent")
+                if parent:
+                    parent_fields = parent.get("fields", {})
+                    epic_summary = parent_fields.get("summary", "")
+                    if epic_summary:
+                        epic_name = epic_summary
+
+                issue_cache[issue_id] = {
+                    "key": issue_key,
+                    "summary": issue_summary,
+                    "epic_name": epic_name,
+                }
+
+            logger.info(
+                f"Pre-fetched {len(issue_cache)} issues (found {len(batch_issues)} of {len(unique_issue_ids)})"
+            )
 
         # Phase 1: CREATE and UPDATE
         for worklog in worklogs:
@@ -97,28 +138,42 @@ class Syncer:
                 issue_id = issue.get("id")
                 issue_key = issue.get("key")
 
-                # Always fetch full issue to get summary (with caching)
+                # Get issue data from pre-fetched cache
                 issue_summary = ""
+                epic_name = None
+
                 if issue_id:
                     issue_id_str = str(issue_id)
 
-                    # Check cache first
+                    # Check cache first (should be pre-populated from batch fetch)
                     if issue_id_str in issue_cache:
-                        issue_summary = issue_cache[issue_id_str]
-                        # Use cached issue_key if we don't have one
-                        if not issue_key:
-                            # Issue key format: extract from cached data or construct
-                            # For now, we need to fetch if key is missing
-                            pass
-
-                    # Fetch from Jira if not cached or key missing
-                    if not issue_key or issue_id_str not in issue_cache:
+                        cached_data = issue_cache[issue_id_str]
+                        issue_key = cached_data.get("key", issue_key)
+                        issue_summary = cached_data.get("summary", "")
+                        epic_name = cached_data.get("epic_name")
+                    else:
+                        # Fallback: fetch individually if not in batch (shouldn't happen often)
+                        logger.debug(f"Issue {issue_id_str} not in cache, fetching individually")
                         try:
-                            jira_issue = self.jira_client.get_issue(issue_id_str)
+                            jira_issue = self.jira_client.get_issue(
+                                issue_id_str, fields=["summary", "parent"]
+                            )
                             issue_key = jira_issue.get("key", issue_key)
-                            issue_summary = jira_issue.get("fields", {}).get("summary", "")
-                            # Cache the summary
-                            issue_cache[issue_id_str] = issue_summary
+                            fields = jira_issue.get("fields", {})
+                            issue_summary = fields.get("summary", "")
+
+                            # Extract Epic from parent
+                            parent = fields.get("parent")
+                            if parent:
+                                parent_fields = parent.get("fields", {})
+                                epic_name = parent_fields.get("summary")
+
+                            # Cache for future use in this sync
+                            issue_cache[issue_id_str] = {
+                                "key": issue_key,
+                                "summary": issue_summary,
+                                "epic_name": epic_name,
+                            }
                         except Exception as e:
                             logger.warning(f"Could not fetch issue {issue_id}: {e}")
                             failed += 1
@@ -154,8 +209,14 @@ class Syncer:
                 # Tempo uses "description" field for worklog comments, not "comment"
                 worklog_comment = worklog.get("description", "")
 
-                # Build description: "ISSUE-KEY: Summary" or "ISSUE-KEY: Summary - comment"
-                base_desc = f"{issue_key}: {issue_summary}" if issue_summary else issue_key
+                # Build description with Epic: "Epic Name > ISSUE-KEY: Summary - comment"
+                # If no Epic: "[No Epic] > ISSUE-KEY: Summary - comment"
+                epic_prefix = epic_name if epic_name else "[No Epic]"
+                base_desc = (
+                    f"{epic_prefix} > {issue_key}: {issue_summary}"
+                    if issue_summary
+                    else f"{epic_prefix} > {issue_key}"
+                )
                 description = f"{base_desc} - {worklog_comment}" if worklog_comment else base_desc
 
                 # Prepare date string for change detection
@@ -208,8 +269,7 @@ class Syncer:
                             }
                         )
                 else:
-                    # UPDATE: Check if data changed (for logging/tracking only)
-                    # We ALWAYS try UPDATE to detect 404 (deleted entries)
+                    # UPDATE: Check if data changed
                     has_changes = self.mapping.has_changes(
                         tempo_worklog_id=tempo_worklog_id,
                         duration_minutes=duration_minutes,
@@ -217,27 +277,25 @@ class Syncer:
                         date_str=date_str,
                     )
 
-                    # Always try UPDATE (to detect deleted entries via 404)
-                    # Note: We can't use GET to check existence (403 Forbidden)
-                    logger.debug(
-                        f"Attempting UPDATE for entry {entry_id} "
-                        f"({'changes detected' if has_changes else 'no changes, checking existence'})"
-                    )
+                    # Performance optimization: Only UPDATE if data changed or we need to check existence
+                    # Check if last existence verification was >24h ago
+                    needs_existence_check = self.mapping.needs_existence_check(tempo_worklog_id)
 
-                    try:
-                        update_result = self.solidtime_client.update_time_entry(
-                            entry_id=entry_id,
-                            duration_minutes=duration_minutes,
-                            date=work_date,
-                            description=description,
-                        )
+                    if has_changes:
+                        # Data changed - perform UPDATE
+                        logger.debug(f"Changes detected for entry {entry_id}, updating")
 
-                        if update_result and update_result.get("data"):
-                            # UPDATE succeeded
-                            self.mapping.mark_processed(tempo_worklog_id)
+                        try:
+                            update_result = self.solidtime_client.update_time_entry(
+                                entry_id=entry_id,
+                                duration_minutes=duration_minutes,
+                                date=work_date,
+                                description=description,
+                            )
 
-                            if has_changes:
-                                # Data changed - update tracking and log
+                            if update_result and update_result.get("data"):
+                                # UPDATE succeeded
+                                self.mapping.mark_processed(tempo_worklog_id)
                                 updated += 1
                                 self.mapping.update_sync_data(
                                     tempo_worklog_id=tempo_worklog_id,
@@ -256,73 +314,136 @@ class Syncer:
                                 )
                                 logger.debug(f"Updated entry for {issue_key}: {duration_minutes}m")
                             else:
-                                # No changes - UPDATE was just existence check
-                                logger.debug(f"No changes for {issue_key}, entry still exists")
-                        else:
-                            # UPDATE returned None (404) - entry was deleted manually
-                            logger.info(
-                                f"Entry {entry_id} not found (404), removing mapping and creating new"
-                            )
-                            self.mapping.remove_mapping(tempo_worklog_id)
+                                # UPDATE returned None (404) - entry was deleted manually
+                                logger.info(
+                                    f"Entry {entry_id} not found (404), removing mapping and creating new"
+                                )
+                                self.mapping.remove_mapping(tempo_worklog_id)
 
-                            # CREATE as new entry
-                            create_result = self.solidtime_client.create_time_entry(
-                                project_id=project_id,
+                                # CREATE as new entry (see recovery logic below)
+                                create_result = self.solidtime_client.create_time_entry(
+                                    project_id=project_id,
+                                    duration_minutes=duration_minutes,
+                                    date=work_date,
+                                    description=description,
+                                )
+
+                                new_entry_id = create_result.get("data", {}).get("id")
+                                if new_entry_id:
+                                    self.mapping.add_mapping(
+                                        tempo_worklog_id=str(tempo_worklog_id),
+                                        solidtime_entry_id=new_entry_id,
+                                        issue_key=issue_key,
+                                        duration_minutes=duration_minutes,
+                                        description=description,
+                                        date=date_str,
+                                    )
+                                    created += 1
+                                    self.mapping.mark_processed(tempo_worklog_id)
+                                    actions.append(
+                                        {
+                                            "action": "CREATE",
+                                            "issue_key": issue_key,
+                                            "worklog_comment": worklog_comment,
+                                            "duration_minutes": duration_minutes,
+                                            "status": "success",
+                                            "reason": "Recovered after manual delete",
+                                        }
+                                    )
+                                    logger.debug(
+                                        f"Recovered entry for {issue_key}: {duration_minutes}m"
+                                    )
+                                else:
+                                    failed += 1
+                                    actions.append(
+                                        {
+                                            "action": "RECOVER",
+                                            "issue_key": issue_key,
+                                            "worklog_comment": worklog_comment,
+                                            "duration_minutes": duration_minutes,
+                                            "status": "failed",
+                                            "error": "Recovery failed - no entry ID",
+                                        }
+                                    )
+                        except Exception as e:
+                            # Unexpected error during UPDATE
+                            logger.error(f"UPDATE failed with exception: {e}")
+                            failed += 1
+                            actions.append(
+                                {
+                                    "action": "UPDATE",
+                                    "issue_key": issue_key,
+                                    "worklog_comment": worklog_comment,
+                                    "duration_minutes": duration_minutes,
+                                    "status": "failed",
+                                    "error": str(e),
+                                }
+                            )
+
+                    elif needs_existence_check:
+                        # No changes, but check existence (periodic verification)
+                        logger.debug(
+                            f"No changes for {issue_key}, but performing periodic existence check"
+                        )
+
+                        try:
+                            update_result = self.solidtime_client.update_time_entry(
+                                entry_id=entry_id,
                                 duration_minutes=duration_minutes,
                                 date=work_date,
                                 description=description,
                             )
 
-                            new_entry_id = create_result.get("data", {}).get("id")
-                            if new_entry_id:
-                                self.mapping.add_mapping(
-                                    tempo_worklog_id=str(tempo_worklog_id),
-                                    solidtime_entry_id=new_entry_id,
-                                    issue_key=issue_key,
-                                    duration_minutes=duration_minutes,
-                                    description=description,
-                                    date=date_str,
-                                )
-                                created += 1
+                            if update_result and update_result.get("data"):
+                                # Entry still exists
                                 self.mapping.mark_processed(tempo_worklog_id)
-                                actions.append(
-                                    {
-                                        "action": "CREATE",
-                                        "issue_key": issue_key,
-                                        "worklog_comment": worklog_comment,
-                                        "duration_minutes": duration_minutes,
-                                        "status": "success",
-                                        "reason": "Recovered after manual delete",
-                                    }
-                                )
-                                logger.debug(
-                                    f"Recovered entry for {issue_key}: {duration_minutes}m"
-                                )
+                                self.mapping.update_last_check(tempo_worklog_id)
+                                logger.debug(f"Existence verified for {issue_key}")
                             else:
-                                failed += 1
-                                actions.append(
-                                    {
-                                        "action": "RECOVER",
-                                        "issue_key": issue_key,
-                                        "worklog_comment": worklog_comment,
-                                        "duration_minutes": duration_minutes,
-                                        "status": "failed",
-                                        "error": "Recovery failed - no entry ID",
-                                    }
+                                # Entry was deleted - recreate it
+                                logger.info(
+                                    f"Entry {entry_id} not found (404), removing mapping and creating new"
                                 )
-                    except Exception as e:
-                        # Unexpected error during UPDATE
-                        logger.error(f"UPDATE failed with exception: {e}")
-                        failed += 1
-                        actions.append(
-                            {
-                                "action": "UPDATE",
-                                "issue_key": issue_key,
-                                "worklog_comment": worklog_comment,
-                                "duration_minutes": duration_minutes,
-                                "status": "failed",
-                                "error": str(e),
-                            }
+                                self.mapping.remove_mapping(tempo_worklog_id)
+
+                                create_result = self.solidtime_client.create_time_entry(
+                                    project_id=project_id,
+                                    duration_minutes=duration_minutes,
+                                    date=work_date,
+                                    description=description,
+                                )
+
+                                new_entry_id = create_result.get("data", {}).get("id")
+                                if new_entry_id:
+                                    self.mapping.add_mapping(
+                                        tempo_worklog_id=str(tempo_worklog_id),
+                                        solidtime_entry_id=new_entry_id,
+                                        issue_key=issue_key,
+                                        duration_minutes=duration_minutes,
+                                        description=description,
+                                        date=date_str,
+                                    )
+                                    created += 1
+                                    self.mapping.mark_processed(tempo_worklog_id)
+                                    actions.append(
+                                        {
+                                            "action": "CREATE",
+                                            "issue_key": issue_key,
+                                            "worklog_comment": worklog_comment,
+                                            "duration_minutes": duration_minutes,
+                                            "status": "success",
+                                            "reason": "Recovered after manual delete",
+                                        }
+                                    )
+                        except Exception as e:
+                            logger.error(f"Existence check failed: {e}")
+                            failed += 1
+
+                    else:
+                        # No changes and recent existence check - skip UPDATE entirely
+                        self.mapping.mark_processed(tempo_worklog_id)
+                        logger.debug(
+                            f"No changes for {issue_key}, skipping UPDATE (recently verified)"
                         )
 
             except Exception as e:
@@ -336,6 +457,10 @@ class Syncer:
                         "error": str(e),
                     }
                 )
+
+        # Save mappings after Phase 1 (batch write optimization)
+        logger.debug("Saving mappings after Phase 1...")
+        self.mapping.save()
 
         # Phase 2: DELETE (Overhang cleanup)
         for tempo_id, mapping in self.mapping.get_unprocessed_mappings():
@@ -369,6 +494,10 @@ class Syncer:
             except Exception as e:
                 logger.error(f"Failed to delete entry: {e}")
                 failed += 1
+
+        # Save mappings after Phase 2 (batch write optimization)
+        logger.debug("Saving mappings after Phase 2...")
+        self.mapping.save()
 
         duration = (datetime.now() - start_time).total_seconds()
         logger.info(

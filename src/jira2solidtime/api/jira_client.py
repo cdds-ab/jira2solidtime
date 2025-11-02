@@ -48,16 +48,21 @@ class JiraClient:
             logger.error(f"Jira API request failed: {e}")
             raise
 
-    def get_issue(self, issue_key: str) -> dict[str, Any]:
+    def get_issue(self, issue_key: str, fields: list[str] | None = None) -> dict[str, Any]:
         """Get issue details.
 
         Args:
             issue_key: Issue key or ID (e.g., 'PROJ-123' or '10386')
+            fields: Specific fields to fetch (e.g., ['summary', 'parent'])
 
         Returns:
             Issue data
         """
-        response = self._make_request("GET", f"/issue/{issue_key}")
+        params = {}
+        if fields:
+            params["fields"] = ",".join(fields)
+
+        response = self._make_request("GET", f"/issue/{issue_key}", params=params)
         return response.json()
 
     def get_issues(self, project_key: str) -> list[dict[str, Any]]:
@@ -73,6 +78,47 @@ class JiraClient:
         response = self._make_request("GET", "/search", params={"jql": jql, "maxResults": 100})
         data = response.json()
         return data.get("issues", [])
+
+    def get_issues_by_ids(
+        self, issue_ids: list[str], fields: list[str] | None = None
+    ) -> dict[str, dict[str, Any]]:
+        """Batch fetch multiple issues by IDs using JQL.
+
+        Args:
+            issue_ids: List of issue IDs (e.g., ['10386', '10387'])
+            fields: Specific fields to fetch (e.g., ['summary', 'parent'])
+
+        Returns:
+            Dictionary mapping issue ID to issue data
+        """
+        if not issue_ids:
+            return {}
+
+        # Build JQL: id IN (10386, 10387, ...)
+        ids_str = ",".join(issue_ids)
+        jql = f"id IN ({ids_str})"
+
+        params: dict[str, Any] = {"jql": jql, "maxResults": 1000}
+        if fields:
+            params["fields"] = ",".join(fields)
+
+        try:
+            response = self._make_request("GET", "/search", params=params)
+            data = response.json()
+            issues = data.get("issues", [])
+
+            # Build dict: issue_id -> issue data
+            result = {}
+            for issue in issues:
+                issue_id = str(issue.get("id"))
+                result[issue_id] = issue
+
+            logger.debug(f"Batch fetched {len(result)} issues from {len(issue_ids)} requested")
+            return result
+
+        except Exception as e:
+            logger.error(f"Batch fetch failed: {e}")
+            return {}
 
     def test_connection(self) -> bool:
         """Test if API connection works.

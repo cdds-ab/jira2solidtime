@@ -25,6 +25,7 @@ class WorklogMapping:
         self.mapping_file = Path(mapping_file)
         self.mapping_file.parent.mkdir(parents=True, exist_ok=True)
         self.mappings: dict[str, dict[str, Any]] = {}
+        self._dirty = False  # Track if mappings have unsaved changes
         self._load()
 
     def _load(self) -> None:
@@ -54,9 +55,15 @@ class WorklogMapping:
             }
             with open(self.mapping_file, "w") as f:
                 json.dump(data, f, indent=2)
+            self._dirty = False
             logger.debug(f"Saved {len(self.mappings)} worklog mappings")
         except OSError as e:
             logger.error(f"Failed to save mappings: {e}")
+
+    def save(self) -> None:
+        """Public method to explicitly save mappings if there are unsaved changes."""
+        if self._dirty:
+            self._save()
 
     def get_solidtime_entry_id(self, tempo_worklog_id: str) -> Optional[str]:
         """Get Solidtime entry ID for a Tempo worklog.
@@ -97,7 +104,7 @@ class WorklogMapping:
             "last_description": description,
             "last_date": date,
         }
-        self._save()
+        self._dirty = True
         logger.debug(f"Mapped Tempo {tempo_worklog_id} -> Solidtime {solidtime_entry_id}")
 
     def is_already_synced(self, tempo_worklog_id: str) -> bool:
@@ -156,7 +163,7 @@ class WorklogMapping:
         """
         if str(tempo_worklog_id) in self.mappings:
             del self.mappings[str(tempo_worklog_id)]
-            self._save()
+            self._dirty = True
             logger.debug(f"Removed mapping for Tempo {tempo_worklog_id}")
 
     def has_changes(
@@ -216,5 +223,42 @@ class WorklogMapping:
             self.mappings[str(tempo_worklog_id)]["last_duration"] = duration_minutes
             self.mappings[str(tempo_worklog_id)]["last_description"] = description
             self.mappings[str(tempo_worklog_id)]["last_date"] = date_str
-            self._save()
+            self.mappings[str(tempo_worklog_id)]["last_check"] = datetime.now().isoformat()
+            self._dirty = True
             logger.debug(f"Updated sync data for Tempo {tempo_worklog_id}")
+
+    def needs_existence_check(self, tempo_worklog_id: str, hours: int = 24) -> bool:
+        """Check if entry needs existence verification (last check >N hours ago).
+
+        Args:
+            tempo_worklog_id: Tempo worklog ID
+            hours: Hours since last check to trigger verification (default: 24)
+
+        Returns:
+            True if existence check is needed, False otherwise
+        """
+        mapping = self.mappings.get(str(tempo_worklog_id))
+        if not mapping:
+            return True  # No mapping = needs check
+
+        last_check_str = mapping.get("last_check")
+        if not last_check_str:
+            return True  # No last check recorded = needs check
+
+        try:
+            last_check = datetime.fromisoformat(last_check_str)
+            hours_since_check = (datetime.now() - last_check).total_seconds() / 3600
+            return hours_since_check > hours
+        except (ValueError, TypeError):
+            return True  # Invalid timestamp = needs check
+
+    def update_last_check(self, tempo_worklog_id: str) -> None:
+        """Update last existence check timestamp.
+
+        Args:
+            tempo_worklog_id: Tempo worklog ID
+        """
+        if str(tempo_worklog_id) in self.mappings:
+            self.mappings[str(tempo_worklog_id)]["last_check"] = datetime.now().isoformat()
+            self._dirty = True
+            logger.debug(f"Updated last check for Tempo {tempo_worklog_id}")
