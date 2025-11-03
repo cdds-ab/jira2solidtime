@@ -171,7 +171,10 @@ The dashboard provides:
 ### Sync Process
 
 1. **Fetch Worklogs**: Retrieves worklogs from Tempo API for configured time range
-2. **Batch Fetch Issues**: Fetches all unique Jira issues in a single API call (performance optimization)
+2. **Batch Fetch Issues**: Fetches all unique Jira issues in a single API call using enhanced search API
+   - Uses new `/rest/api/3/search/jql` endpoint (POST)
+   - Automatic fallback to legacy v2 API for older instances
+   - Resilient against Atlassian API deprecations
 3. **Extract Epic Data**: Retrieves Epic (parent) information for work package context
 4. **Build Descriptions**: Creates formatted descriptions: `Epic Name > ISSUE-KEY: Summary - Comment` or `[No Epic] > ISSUE-KEY: Summary - Comment`
 5. **Intelligent Sync**:

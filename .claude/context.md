@@ -156,6 +156,16 @@ jira2solidtime/
 
 ## 🐛 Known Issues & Solutions
 
+### Issue: Jira batch fetch fails with HTTP 410 Gone
+**Root Cause**: Atlassian deprecating legacy search endpoints
+- `/rest/api/2/search` returns 410 Gone (deprecated)
+- Rolled out region-by-region on Jira Cloud
+**Solution**: Migrate to enhanced search API
+- Primary: `POST /rest/api/3/search/jql` (new enhanced search)
+- Fallback: `GET /rest/api/2/search` (for older instances)
+- Automatic detection and fallback on 410/404 errors
+**Status**: ✅ Fixed in commit ff4436e (Issue #23)
+
 ### Issue: Second worklog not visible in Solidtime
 **Cause**: User was filtering wrong date range in Solidtime UI
 **Solution**: Check date filters - worklogs created on different days
@@ -172,12 +182,12 @@ jira2solidtime/
 
 ### Issue: Unnecessary UPDATEs
 **Requirement**: "No update entry for things that don't need updating"
-**Solution**: Implement change detection
-- Store last_duration, last_description, last_date in mapping
+**Solution**: Implement change detection + smart UPDATE logic
+- Store last_duration, last_description, last_date, last_check in mapping
 - Compare before UPDATE
-- Only log/track if has_changes=true
-- Still execute UPDATE to detect 404 (deleted entries)
-**Status**: ✅ Resolved
+- Only UPDATE if data changed OR >24h since last check
+- Skip UPDATE entirely if no changes and recently verified
+**Status**: ✅ Resolved (v0.2.0)
 
 ### Issue: Worklog comments missing
 **Root Cause**: Using wrong Tempo API field
@@ -420,29 +430,39 @@ docker-compose up -d
    - Batch Jira issue fetching (N+1 problem eliminated)
    - Smart UPDATE logic (skip when no changes + recently verified)
    - Batch file writes (2 writes per sync instead of 100+)
-3. ✅ Code quality checks passed (ruff, mypy, pre-commit hooks)
-4. ✅ CI/CD pipeline passed
-5. ✅ Documentation updated (README, context.md)
+3. ✅ **Jira API Migration** - Fixed HTTP 410 Gone errors
+   - Migrated to enhanced search API: `/rest/api/3/search/jql`
+   - Added automatic fallback to v2 API for older instances
+   - Resilient against Atlassian API deprecations
+   - Created GitHub Issue #23 for documentation
+4. ✅ Code quality checks passed (ruff, mypy, pre-commit hooks)
+5. ✅ CI/CD pipeline passed
+6. ✅ Documentation updated (README, context.md)
 
 **Files Modified:**
-- `src/jira2solidtime/api/jira_client.py` - Added batch fetching + fields parameter
+- `src/jira2solidtime/api/jira_client.py` - Enhanced search API + v2 fallback, Epic support
 - `src/jira2solidtime/sync/syncer.py` - Epic integration + performance optimizations
 - `src/jira2solidtime/sync/worklog_mapping.py` - Smart UPDATE logic + batch writes
-- `README.md` - Updated features and sync logic
+- `README.md` - Updated features, sync logic, and API information
 - `.claude/context.md` - This file
 
 **Commits:**
 - `df9caca` - `feat: add Epic to descriptions and optimize sync performance`
-- Status: ✅ Pushed to master
+- `1fac3a2` - `docs: update README and context for v0.2.0 features`
+- `ff4436e` - `fix: migrate Jira batch fetch to enhanced search API (v3/search/jql)`
+- Status: ✅ All pushed to master
+
+**Issues:**
+- #23 - Jira batch fetch fails with HTTP 410 (fixed)
 
 **Release:**
 - PR #21 created by release-please for v0.2.0
-- Changelog includes Epic feature and performance improvements
+- Changelog will include Epic feature, performance improvements, and Jira API fix
 - Ready to merge when user approves
 
 **Next Steps:**
 - Merge release-please PR #21 to trigger v0.2.0 release
-- Test with real config to verify Epic display + performance
+- Test with real Jira Cloud instance to verify enhanced search API
 - Docker image 0.2.0 will be built and pushed automatically
 
 ## 📊 Project Health
@@ -459,6 +479,6 @@ docker-compose up -d
 
 ---
 
-**Last Updated**: 2025-11-02 20:55 CET
-**Updated By**: Claude (Epic integration + performance optimizations)
-**Project Status**: ✅ Stable, production-ready, fully documented, high performance
+**Last Updated**: 2025-11-02 21:15 CET
+**Updated By**: Claude (Epic integration + performance optimizations + Jira API fix)
+**Project Status**: ✅ Stable, production-ready, fully documented, high performance, API-future-proof
