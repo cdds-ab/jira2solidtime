@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.2.0](https://github.com/cdds-ab/jira2solidtime/compare/v0.1.0...v0.2.0) (2025-11-03)
+
+
+### Features
+
+* add Epic to descriptions and optimize sync performance ([df9caca](https://github.com/cdds-ab/jira2solidtime/commit/df9cacabd17cff67a6d4e35ad7203ef4b8b16692))
+
+
+### Bug Fixes
+
+* migrate Jira batch fetch to enhanced search API (v3/search/jql) ([ff4436e](https://github.com/cdds-ab/jira2solidtime/commit/ff4436e99fc864cec5037ad54306fde2cf346784)), closes [#23](https://github.com/cdds-ab/jira2solidtime/issues/23)
+
+
+### Documentation
+
+* add comprehensive deployment guides for local and Azure ([fdfc04f](https://github.com/cdds-ab/jira2solidtime/commit/fdfc04fd334598e0634666e57d114887cfb7a1d9))
+* update context.md with comprehensive project status ([1ac010c](https://github.com/cdds-ab/jira2solidtime/commit/1ac010caaf5c11e2902ddab0a8c44f7f30f1d908))
+* update documentation for Jira API migration and v0.2.0 ([9b74c02](https://github.com/cdds-ab/jira2solidtime/commit/9b74c0268ad5030e8592941d5e511e69ca92686a))
+* update README and context for v0.2.0 features ([1fac3a2](https://github.com/cdds-ab/jira2solidtime/commit/1fac3a2e8c0b99c7d4ec4f6bf9efccc366b77366))
+
 ## 0.1.0 (2025-10-24)
 
 
