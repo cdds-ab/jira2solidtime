@@ -1,12 +1,12 @@
 # Project Status & Context
 
 ## 📊 Current State
-- **Version**: 0.2.0 (Pending release)
+- **Version**: 0.2.0 (Released: 2025-11-03)
 - **Branch**: master
-- **Status**: ✅ Production-ready, fully functional with Epic support & performance optimizations
-- **Docker Image**: `cddsab/jira2solidtime:0.1.0` + `latest` (0.2.0 pending release)
-- **Latest Release**: https://github.com/cdds-ab/jira2solidtime/releases/tag/v0.1.0
-- **Next Release PR**: https://github.com/cdds-ab/jira2solidtime/pull/21
+- **Status**: ✅ Production-ready, fully functional with Epic support, performance optimizations & API-future-proof
+- **Docker Image**: `cddsab/jira2solidtime:0.2.0` + `latest` (both updated 2025-11-03)
+- **Latest Release**: https://github.com/cdds-ab/jira2solidtime/releases/tag/v0.2.0
+- **Previous Release**: https://github.com/cdds-ab/jira2solidtime/releases/tag/v0.1.0
 
 ## 🎯 Project Vision
 Minimal, no-bloat daemon for syncing Jira Tempo worklogs to Solidtime.
@@ -409,7 +409,7 @@ docker-compose up -d
 
 ### Docker Hub
 - Image: https://hub.docker.com/r/cddsab/jira2solidtime
-- Tags: `0.1.0`, `latest`
+- Tags: `0.2.0`, `0.1.0`, `latest` (latest = 0.2.0)
 
 ### Documentation
 - README: Project overview
@@ -453,17 +453,24 @@ docker-compose up -d
 - Status: ✅ All pushed to master
 
 **Issues:**
-- #23 - Jira batch fetch fails with HTTP 410 (fixed)
+- #23 - Jira batch fetch fails with HTTP 410 (✅ fixed and closed)
 
 **Release:**
-- PR #21 created by release-please for v0.2.0
-- Changelog will include Epic feature, performance improvements, and Jira API fix
-- Ready to merge when user approves
+- ✅ PR #21 merged (release-please for v0.2.0)
+- ✅ v0.2.0 released: 2025-11-03 00:21 UTC
+- ✅ Docker images published to Docker Hub
+  - `cddsab/jira2solidtime:v0.2.0`
+  - `cddsab/jira2solidtime:latest`
+- ✅ Changelog includes:
+  - Epic feature integration
+  - 5-10x performance improvements
+  - Jira API migration (v3/search/jql)
+  - Comprehensive documentation
 
-**Next Steps:**
-- Merge release-please PR #21 to trigger v0.2.0 release
-- Test with real Jira Cloud instance to verify enhanced search API
-- Docker image 0.2.0 will be built and pushed automatically
+**Deployment:**
+- Users can now pull: `docker pull cddsab/jira2solidtime:0.2.0`
+- Docker Compose: Update image tag to `0.2.0` or `latest`
+- Azure: Update container image to new version
 
 ## 📊 Project Health
 
@@ -471,14 +478,14 @@ docker-compose up -d
 - **Code Quality**: ✅ All checks pass
 - **Security**: ✅ No vulnerabilities
 - **Documentation**: ✅ Comprehensive + updated for v0.2.0
-- **Latest Release**: ✅ v0.1.0 published
-- **Next Release**: ⏳ v0.2.0 pending (PR #21 ready to merge)
-- **Docker Image**: ✅ Available on Docker Hub
+- **Current Release**: ✅ v0.2.0 published (2025-11-03)
+- **Docker Image**: ✅ v0.2.0 + latest on Docker Hub (updated 2025-11-03)
 - **Production Ready**: ✅ Yes
 - **Performance**: ✅ 5-10x faster than v0.1.0
+- **API Compatibility**: ✅ Future-proof (enhanced search with v2 fallback)
 
 ---
 
-**Last Updated**: 2025-11-02 21:15 CET
-**Updated By**: Claude (Epic integration + performance optimizations + Jira API fix)
-**Project Status**: ✅ Stable, production-ready, fully documented, high performance, API-future-proof
+**Last Updated**: 2025-11-03 10:30 CET
+**Updated By**: Claude (v0.2.0 release completed)
+**Project Status**: ✅ Released, stable, production-ready, fully documented, high performance, API-future-proof

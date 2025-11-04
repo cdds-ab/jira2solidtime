@@ -32,18 +32,25 @@ Minimal daemon for synchronizing time tracking data from Jira Tempo to Solidtime
 
 ### Docker Setup (Recommended)
 
-1. **Create configuration:**
+1. **Pull latest image:**
+```bash
+docker pull cddsab/jira2solidtime:latest
+# or specific version
+docker pull cddsab/jira2solidtime:0.2.0
+```
+
+2. **Create configuration:**
 ```bash
 cp config.json.example config.json
 # Edit config.json with your API credentials and mappings
 ```
 
-2. **Start the daemon:**
+3. **Start the daemon:**
 ```bash
 docker-compose up -d
 ```
 
-3. **Access web UI:**
+4. **Access web UI:**
 - Dashboard: http://localhost:8080
 - Sync history and statistics
 - Manual sync trigger
@@ -91,7 +98,7 @@ az webapp create \
   --resource-group rg-jira2solidtime \
   --plan plan-jira2solidtime \
   --name jira2solidtime-app \
-  --deployment-container-image-name cddsab/jira2solidtime:0.1.0
+  --deployment-container-image-name cddsab/jira2solidtime:0.2.0
 
 # Configure app
 az webapp config appsettings set \
