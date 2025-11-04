@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.1](https://github.com/cdds-ab/jira2solidtime/compare/v0.2.0...v0.2.1) (2025-11-04)
+
+
+### Documentation
+
+* update all documentation for v0.2.0 release ([32c1dbd](https://github.com/cdds-ab/jira2solidtime/commit/32c1dbd81de74e8b9159b56873ce0f030452edda))
+
 ## [0.2.0](https://github.com/cdds-ab/jira2solidtime/compare/v0.1.0...v0.2.0) (2025-11-03)
 
 
