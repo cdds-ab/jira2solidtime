@@ -368,6 +368,8 @@ class Syncer:
 
                     if dry_run:
                         # Dry-run mode: only log what would happen
+                        # Mark as processed to correctly calculate DELETE candidates
+                        self.mapping.mark_processed(tempo_worklog_id)
                         if has_changes:
                             logger.info(f"{mode}Would UPDATE: {issue_key} ({duration_minutes}m)")
                             updated += 1
