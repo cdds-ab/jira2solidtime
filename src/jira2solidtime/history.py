@@ -205,3 +205,51 @@ class History:
             )
             conn.commit()
             logger.info(f"Cleaned up sync records older than {days} days")
+
+    def get_syncs_with_changes(self, limit: int = 50) -> tuple[list[dict[str, Any]], int]:
+        """Get only syncs where something actually happened.
+
+        Args:
+            limit: Maximum number of syncs with changes to return
+
+        Returns:
+            Tuple of (syncs_with_changes, empty_sync_count)
+        """
+        import json
+
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+
+            # Count empty syncs (no changes)
+            empty_count = conn.execute(
+                """
+                SELECT COUNT(*) FROM syncs
+                WHERE created = 0 AND updated = 0 AND deleted = 0 AND failed = 0
+                """
+            ).fetchone()[0]
+
+            # Get syncs with actual changes
+            rows = conn.execute(
+                """
+                SELECT * FROM syncs
+                WHERE created > 0 OR updated > 0 OR deleted > 0 OR failed > 0
+                ORDER BY id DESC
+                LIMIT ?
+                """,
+                (limit,),
+            ).fetchall()
+
+            syncs = []
+            for row in rows:
+                sync = dict(row)
+                # Parse actions JSON if present
+                if sync.get("actions"):
+                    try:
+                        sync["actions"] = json.loads(sync["actions"])
+                    except Exception:
+                        sync["actions"] = []
+                else:
+                    sync["actions"] = []
+                syncs.append(sync)
+
+            return syncs, empty_count

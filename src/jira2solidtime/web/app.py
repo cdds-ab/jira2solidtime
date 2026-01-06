@@ -35,15 +35,12 @@ def create_app(config: Config, daemon: SyncDaemon) -> Flask:
         Returns:
             HTML page
         """
-        config_data = config.to_dict()
-        last_syncs = app.config["HISTORY"].get_last_syncs(10)
-        stats = app.config["HISTORY"].get_sync_stats()
+        syncs_with_changes, empty_count = app.config["HISTORY"].get_syncs_with_changes(50)
 
         return render_template(
             "index.html",
-            config=config_data,
-            last_syncs=last_syncs,
-            stats=stats,
+            syncs=syncs_with_changes,
+            empty_count=empty_count,
         )
 
     @app.route("/api/config", methods=["GET"])
@@ -97,6 +94,17 @@ def create_app(config: Config, daemon: SyncDaemon) -> Flask:
         limit = request.args.get("limit", 50, type=int)
         syncs = app.config["HISTORY"].get_last_syncs(limit)
         return jsonify({"syncs": syncs})
+
+    @app.route("/api/history/changes", methods=["GET"])
+    def get_history_changes() -> Any:
+        """Get only syncs that had actual changes.
+
+        Returns:
+            Syncs with changes and count of empty syncs
+        """
+        limit = request.args.get("limit", 50, type=int)
+        syncs, empty_count = app.config["HISTORY"].get_syncs_with_changes(limit)
+        return jsonify({"syncs": syncs, "empty_count": empty_count})
 
     @app.route("/api/stats", methods=["GET"])
     def get_stats() -> Any:
