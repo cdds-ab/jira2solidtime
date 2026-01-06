@@ -1,11 +1,14 @@
-"""Worklog ID mapping system for deduplication.
+"""Worklog ID mapping system for deduplication using SQLite.
 
 Tracks Tempo worklog IDs → Solidtime time entry IDs to prevent
 duplicate syncs and enable update detection.
+
+Uses SQLite with WAL mode for crash-safe atomic writes.
 """
 
 import json
 import logging
+import sqlite3
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Optional
@@ -14,56 +17,99 @@ logger = logging.getLogger(__name__)
 
 
 class WorklogMapping:
-    """Manages mapping between Tempo worklog IDs and Solidtime time entry IDs."""
+    """Manages mapping between Tempo worklog IDs and Solidtime time entry IDs.
 
-    def __init__(self, mapping_file: str = "data/worklog_mapping.json") -> None:
+    Uses SQLite database (shared with history.db) for crash-safe persistence.
+    """
+
+    def __init__(self, db_path: str = "data/history.db") -> None:
         """Initialize worklog mapping.
 
         Args:
-            mapping_file: Path to JSON file storing mappings
+            db_path: Path to SQLite database file
         """
-        self.mapping_file = Path(mapping_file)
-        self.mapping_file.parent.mkdir(parents=True, exist_ok=True)
-        self.mappings: dict[str, dict[str, Any]] = {}
-        self._dirty = False  # Track if mappings have unsaved changes
-        self._load()
+        self.db_path = Path(db_path)
+        self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        self._init_db()
+        self._migrate_from_json()
 
-    def _load(self) -> None:
-        """Load existing mappings from file."""
-        if not self.mapping_file.exists():
-            logger.debug(f"Creating new mapping file: {self.mapping_file}")
-            self._save()
+    def _init_db(self) -> None:
+        """Initialize database schema if not exists."""
+        with sqlite3.connect(self.db_path) as conn:
+            # Enable WAL mode for crash safety
+            conn.execute("PRAGMA journal_mode=WAL")
+
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS worklog_mappings (
+                    tempo_worklog_id TEXT PRIMARY KEY,
+                    solidtime_entry_id TEXT NOT NULL,
+                    issue_key TEXT,
+                    last_duration INTEGER,
+                    last_description TEXT,
+                    last_date TEXT,
+                    created_at TEXT,
+                    last_check TEXT,
+                    processed INTEGER DEFAULT 0
+                )
+                """
+            )
+            conn.commit()
+            logger.debug(f"Initialized worklog mapping database at {self.db_path}")
+
+    def _migrate_from_json(self) -> None:
+        """Migrate existing JSON mappings to SQLite (one-time migration)."""
+        json_path = self.db_path.parent / "worklog_mapping.json"
+        if not json_path.exists():
             return
 
         try:
-            with open(self.mapping_file) as f:
+            with open(json_path) as f:
                 data = json.load(f)
-                self.mappings = data.get("mappings", {})
-                logger.debug(f"Loaded {len(self.mappings)} worklog mappings")
+                mappings = data.get("mappings", {})
+
+            if not mappings:
+                return
+
+            # Check if migration is needed (any entries in JSON not in SQLite)
+            with sqlite3.connect(self.db_path) as conn:
+                existing = conn.execute("SELECT COUNT(*) FROM worklog_mappings").fetchone()[0]
+
+                if existing > 0:
+                    logger.debug("SQLite already has mappings, skipping JSON migration")
+                    return
+
+                # Migrate all entries
+                logger.info(f"Migrating {len(mappings)} mappings from JSON to SQLite...")
+                for tempo_id, mapping in mappings.items():
+                    conn.execute(
+                        """
+                        INSERT OR REPLACE INTO worklog_mappings
+                        (tempo_worklog_id, solidtime_entry_id, issue_key, last_duration,
+                         last_description, last_date, created_at, last_check, processed)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)
+                        """,
+                        (
+                            str(tempo_id),
+                            mapping.get("solidtime_entry_id", ""),
+                            mapping.get("issue_key", ""),
+                            mapping.get("last_duration"),
+                            mapping.get("last_description"),
+                            mapping.get("last_date"),
+                            mapping.get("created_at"),
+                            mapping.get("last_check"),
+                        ),
+                    )
+                conn.commit()
+                logger.info(f"Successfully migrated {len(mappings)} mappings to SQLite")
+
+            # Rename JSON file to backup
+            backup_path = json_path.with_suffix(".json.migrated")
+            json_path.rename(backup_path)
+            logger.info(f"Renamed {json_path} to {backup_path}")
+
         except (json.JSONDecodeError, OSError) as e:
-            logger.warning(f"Could not load mappings: {e}, starting fresh")
-            self.mappings = {}
-            self._save()
-
-    def _save(self) -> None:
-        """Save mappings to file."""
-        try:
-            data = {
-                "version": "1.0",
-                "last_updated": datetime.now().isoformat(),
-                "mappings": self.mappings,
-            }
-            with open(self.mapping_file, "w") as f:
-                json.dump(data, f, indent=2)
-            self._dirty = False
-            logger.debug(f"Saved {len(self.mappings)} worklog mappings")
-        except OSError as e:
-            logger.error(f"Failed to save mappings: {e}")
-
-    def save(self) -> None:
-        """Public method to explicitly save mappings if there are unsaved changes."""
-        if self._dirty:
-            self._save()
+            logger.warning(f"Could not migrate JSON mappings: {e}")
 
     def get_solidtime_entry_id(self, tempo_worklog_id: str) -> Optional[str]:
         """Get Solidtime entry ID for a Tempo worklog.
@@ -74,8 +120,12 @@ class WorklogMapping:
         Returns:
             Solidtime entry ID if mapped, None otherwise
         """
-        mapping = self.mappings.get(str(tempo_worklog_id))
-        return mapping.get("solidtime_entry_id") if mapping else None
+        with sqlite3.connect(self.db_path) as conn:
+            row = conn.execute(
+                "SELECT solidtime_entry_id FROM worklog_mappings WHERE tempo_worklog_id = ?",
+                (str(tempo_worklog_id),),
+            ).fetchone()
+            return row[0] if row else None
 
     def add_mapping(
         self,
@@ -96,15 +146,26 @@ class WorklogMapping:
             description: Last synced description (for change detection)
             date: Last synced date (for change detection)
         """
-        self.mappings[str(tempo_worklog_id)] = {
-            "solidtime_entry_id": solidtime_entry_id,
-            "issue_key": issue_key,
-            "created_at": datetime.now().isoformat(),
-            "last_duration": duration_minutes,
-            "last_description": description,
-            "last_date": date,
-        }
-        self._dirty = True
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute(
+                """
+                INSERT OR REPLACE INTO worklog_mappings
+                (tempo_worklog_id, solidtime_entry_id, issue_key, last_duration,
+                 last_description, last_date, created_at, last_check, processed)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)
+                """,
+                (
+                    str(tempo_worklog_id),
+                    solidtime_entry_id,
+                    issue_key,
+                    duration_minutes,
+                    description,
+                    date,
+                    datetime.now().isoformat(),
+                    datetime.now().isoformat(),
+                ),
+            )
+            conn.commit()
         logger.debug(f"Mapped Tempo {tempo_worklog_id} -> Solidtime {solidtime_entry_id}")
 
     def is_already_synced(self, tempo_worklog_id: str) -> bool:
@@ -116,7 +177,12 @@ class WorklogMapping:
         Returns:
             True if already mapped, False otherwise
         """
-        return str(tempo_worklog_id) in self.mappings
+        with sqlite3.connect(self.db_path) as conn:
+            row = conn.execute(
+                "SELECT 1 FROM worklog_mappings WHERE tempo_worklog_id = ?",
+                (str(tempo_worklog_id),),
+            ).fetchone()
+            return row is not None
 
     def get_stats(self) -> dict[str, Any]:
         """Get mapping statistics.
@@ -124,10 +190,15 @@ class WorklogMapping:
         Returns:
             Dictionary with mapping counts
         """
-        return {
-            "total_mappings": len(self.mappings),
-            "unique_issues": len({m.get("issue_key") for m in self.mappings.values()}),
-        }
+        with sqlite3.connect(self.db_path) as conn:
+            total = conn.execute("SELECT COUNT(*) FROM worklog_mappings").fetchone()[0]
+            unique_issues = conn.execute(
+                "SELECT COUNT(DISTINCT issue_key) FROM worklog_mappings"
+            ).fetchone()[0]
+            return {
+                "total_mappings": total,
+                "unique_issues": unique_issues,
+            }
 
     def mark_processed(self, tempo_worklog_id: str) -> None:
         """Mark a mapping as processed in current sync.
@@ -135,13 +206,18 @@ class WorklogMapping:
         Args:
             tempo_worklog_id: Tempo worklog ID
         """
-        if str(tempo_worklog_id) in self.mappings:
-            self.mappings[str(tempo_worklog_id)]["processed"] = True
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute(
+                "UPDATE worklog_mappings SET processed = 1 WHERE tempo_worklog_id = ?",
+                (str(tempo_worklog_id),),
+            )
+            conn.commit()
 
     def reset_processed(self) -> None:
         """Reset processed flag for all mappings (call at start of sync)."""
-        for mapping in self.mappings.values():
-            mapping["processed"] = False
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute("UPDATE worklog_mappings SET processed = 0")
+            conn.commit()
 
     def get_unprocessed_mappings(self) -> list[tuple[str, dict[str, Any]]]:
         """Get mappings that were not processed (deleted worklogs).
@@ -149,11 +225,25 @@ class WorklogMapping:
         Returns:
             List of (tempo_worklog_id, mapping) tuples for unprocessed entries
         """
-        return [
-            (tempo_id, mapping)
-            for tempo_id, mapping in self.mappings.items()
-            if not mapping.get("processed", False)
-        ]
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            rows = conn.execute("SELECT * FROM worklog_mappings WHERE processed = 0").fetchall()
+
+            return [
+                (
+                    row["tempo_worklog_id"],
+                    {
+                        "solidtime_entry_id": row["solidtime_entry_id"],
+                        "issue_key": row["issue_key"],
+                        "last_duration": row["last_duration"],
+                        "last_description": row["last_description"],
+                        "last_date": row["last_date"],
+                        "created_at": row["created_at"],
+                        "last_check": row["last_check"],
+                    },
+                )
+                for row in rows
+            ]
 
     def remove_mapping(self, tempo_worklog_id: str) -> None:
         """Remove a mapping.
@@ -161,10 +251,13 @@ class WorklogMapping:
         Args:
             tempo_worklog_id: Tempo worklog ID
         """
-        if str(tempo_worklog_id) in self.mappings:
-            del self.mappings[str(tempo_worklog_id)]
-            self._dirty = True
-            logger.debug(f"Removed mapping for Tempo {tempo_worklog_id}")
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute(
+                "DELETE FROM worklog_mappings WHERE tempo_worklog_id = ?",
+                (str(tempo_worklog_id),),
+            )
+            conn.commit()
+        logger.debug(f"Removed mapping for Tempo {tempo_worklog_id}")
 
     def has_changes(
         self,
@@ -184,25 +277,30 @@ class WorklogMapping:
         Returns:
             True if data changed or no previous sync data, False otherwise
         """
-        mapping = self.mappings.get(str(tempo_worklog_id))
-        if not mapping:
-            return True  # No mapping = first sync = has changes
+        with sqlite3.connect(self.db_path) as conn:
+            row = conn.execute(
+                """
+                SELECT last_duration, last_description, last_date
+                FROM worklog_mappings WHERE tempo_worklog_id = ?
+                """,
+                (str(tempo_worklog_id),),
+            ).fetchone()
 
-        # Compare with last synced values
-        last_duration = mapping.get("last_duration")
-        last_description = mapping.get("last_description")
-        last_date = mapping.get("last_date")
+            if not row:
+                return True  # No mapping = first sync = has changes
 
-        # If any value is missing (old mapping format), assume changed
-        if last_duration is None or last_description is None or last_date is None:
-            return True
+            last_duration, last_description, last_date = row
 
-        # Check if any field changed
-        return (
-            duration_minutes != last_duration
-            or description != last_description
-            or date_str != last_date
-        )
+            # If any value is missing (old mapping format), assume changed
+            if last_duration is None or last_description is None or last_date is None:
+                return True
+
+            # Check if any field changed
+            return (
+                duration_minutes != last_duration
+                or description != last_description
+                or date_str != last_date
+            )
 
     def update_sync_data(
         self,
@@ -219,13 +317,23 @@ class WorklogMapping:
             description: Current description
             date_str: Current date as ISO string
         """
-        if str(tempo_worklog_id) in self.mappings:
-            self.mappings[str(tempo_worklog_id)]["last_duration"] = duration_minutes
-            self.mappings[str(tempo_worklog_id)]["last_description"] = description
-            self.mappings[str(tempo_worklog_id)]["last_date"] = date_str
-            self.mappings[str(tempo_worklog_id)]["last_check"] = datetime.now().isoformat()
-            self._dirty = True
-            logger.debug(f"Updated sync data for Tempo {tempo_worklog_id}")
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute(
+                """
+                UPDATE worklog_mappings
+                SET last_duration = ?, last_description = ?, last_date = ?, last_check = ?
+                WHERE tempo_worklog_id = ?
+                """,
+                (
+                    duration_minutes,
+                    description,
+                    date_str,
+                    datetime.now().isoformat(),
+                    str(tempo_worklog_id),
+                ),
+            )
+            conn.commit()
+        logger.debug(f"Updated sync data for Tempo {tempo_worklog_id}")
 
     def needs_existence_check(self, tempo_worklog_id: str, hours: int = 24) -> bool:
         """Check if entry needs existence verification (last check >N hours ago).
@@ -237,20 +345,21 @@ class WorklogMapping:
         Returns:
             True if existence check is needed, False otherwise
         """
-        mapping = self.mappings.get(str(tempo_worklog_id))
-        if not mapping:
-            return True  # No mapping = needs check
+        with sqlite3.connect(self.db_path) as conn:
+            row = conn.execute(
+                "SELECT last_check FROM worklog_mappings WHERE tempo_worklog_id = ?",
+                (str(tempo_worklog_id),),
+            ).fetchone()
 
-        last_check_str = mapping.get("last_check")
-        if not last_check_str:
-            return True  # No last check recorded = needs check
+            if not row or not row[0]:
+                return True  # No last check recorded = needs check
 
-        try:
-            last_check = datetime.fromisoformat(last_check_str)
-            hours_since_check = (datetime.now() - last_check).total_seconds() / 3600
-            return hours_since_check > hours
-        except (ValueError, TypeError):
-            return True  # Invalid timestamp = needs check
+            try:
+                last_check = datetime.fromisoformat(row[0])
+                hours_since_check = (datetime.now() - last_check).total_seconds() / 3600
+                return hours_since_check > hours
+            except (ValueError, TypeError):
+                return True  # Invalid timestamp = needs check
 
     def update_last_check(self, tempo_worklog_id: str) -> None:
         """Update last existence check timestamp.
@@ -258,7 +367,18 @@ class WorklogMapping:
         Args:
             tempo_worklog_id: Tempo worklog ID
         """
-        if str(tempo_worklog_id) in self.mappings:
-            self.mappings[str(tempo_worklog_id)]["last_check"] = datetime.now().isoformat()
-            self._dirty = True
-            logger.debug(f"Updated last check for Tempo {tempo_worklog_id}")
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute(
+                "UPDATE worklog_mappings SET last_check = ? WHERE tempo_worklog_id = ?",
+                (datetime.now().isoformat(), str(tempo_worklog_id)),
+            )
+            conn.commit()
+        logger.debug(f"Updated last check for Tempo {tempo_worklog_id}")
+
+    def save(self) -> None:
+        """Compatibility method - SQLite auto-commits, so this is a no-op.
+
+        Kept for API compatibility with code that calls save() after batch operations.
+        """
+        # SQLite auto-commits within each method, no explicit save needed
+        pass

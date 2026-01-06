@@ -2,6 +2,7 @@
 
 import logging
 from datetime import datetime, timedelta
+from pathlib import Path
 from typing import Any, Optional
 
 from jira2solidtime.api.jira_client import JiraClient
@@ -11,6 +12,10 @@ from jira2solidtime.sync.mapper import Mapper
 from jira2solidtime.sync.worklog_mapping import WorklogMapping
 
 logger = logging.getLogger(__name__)
+
+# Lock file to prevent concurrent syncs (race condition protection)
+# Using data/ directory which is already mounted in Docker
+LOCK_FILE = Path("data/jira2solidtime.lock")
 
 
 class Syncer:
@@ -39,16 +44,64 @@ class Syncer:
         self.mapper = mapper
         self.mapping = mapping or WorklogMapping()
 
-    def sync(self, days_back: int = 30) -> dict[str, Any]:
+    def sync(
+        self,
+        days_back: int = 30,
+        dry_run: bool = False,
+        max_creates: int = 50,
+        max_deletes: int = 10,
+    ) -> dict[str, Any]:
         """Perform complete synchronization with CREATE/UPDATE/DELETE.
 
         Args:
             days_back: Number of days to sync back
+            dry_run: If True, only log what would happen without making changes
+            max_creates: Maximum CREATE operations per sync (safety limit)
+            max_deletes: Maximum DELETE operations per sync (safety limit)
 
         Returns:
             Sync result with detailed action history
         """
-        logger.info(f"Starting sync for last {days_back} days...")
+        mode = "[DRY-RUN] " if dry_run else ""
+        logger.info(f"{mode}Starting sync for last {days_back} days...")
+
+        # Check for concurrent sync (race condition protection)
+        if LOCK_FILE.exists():
+            logger.warning("Sync already running (lock file exists), skipping")
+            return {"success": False, "error": "locked", "message": "Another sync is in progress"}
+
+        # Create lock file
+        if not dry_run:
+            try:
+                LOCK_FILE.touch()
+                logger.debug("Created sync lock file")
+            except OSError as e:
+                logger.error(f"Failed to create lock file: {e}")
+                return {"success": False, "error": str(e)}
+
+        try:
+            return self._sync_internal(
+                days_back=days_back,
+                dry_run=dry_run,
+                mode=mode,
+                max_creates=max_creates,
+                max_deletes=max_deletes,
+            )
+        finally:
+            # Always remove lock file when done
+            if not dry_run:
+                LOCK_FILE.unlink(missing_ok=True)
+                logger.debug("Removed sync lock file")
+
+    def _sync_internal(
+        self,
+        days_back: int,
+        dry_run: bool,
+        mode: str,
+        max_creates: int,
+        max_deletes: int,
+    ) -> dict[str, Any]:
+        """Internal sync logic (extracted for clean lock handling)."""
         start_time = datetime.now()
 
         # Reset processed flags for this sync run
@@ -227,6 +280,38 @@ class Syncer:
 
                 if not entry_id:
                     # CREATE: New worklog
+                    # Safety limit check for CREATEs
+                    if created >= max_creates:
+                        logger.warning(
+                            f"CREATE limit reached ({max_creates}), skipping {issue_key}"
+                        )
+                        actions.append(
+                            {
+                                "action": "CREATE",
+                                "issue_key": issue_key,
+                                "worklog_comment": worklog_comment,
+                                "duration_minutes": duration_minutes,
+                                "status": "skipped",
+                                "reason": f"CREATE limit ({max_creates}) reached",
+                            }
+                        )
+                        continue
+
+                    if dry_run:
+                        # Dry-run: only log, no actual API call
+                        logger.info(f"{mode}Would CREATE: {issue_key} ({duration_minutes}m)")
+                        created += 1
+                        actions.append(
+                            {
+                                "action": "CREATE",
+                                "issue_key": issue_key,
+                                "worklog_comment": worklog_comment,
+                                "duration_minutes": duration_minutes,
+                                "status": "dry_run",
+                            }
+                        )
+                        continue
+
                     result = self.solidtime_client.create_time_entry(
                         project_id=project_id,
                         duration_minutes=duration_minutes,
@@ -280,6 +365,25 @@ class Syncer:
                     # Performance optimization: Only UPDATE if data changed or we need to check existence
                     # Check if last existence verification was >24h ago
                     needs_existence_check = self.mapping.needs_existence_check(tempo_worklog_id)
+
+                    if dry_run:
+                        # Dry-run mode: only log what would happen
+                        if has_changes:
+                            logger.info(f"{mode}Would UPDATE: {issue_key} ({duration_minutes}m)")
+                            updated += 1
+                            actions.append(
+                                {
+                                    "action": "UPDATE",
+                                    "issue_key": issue_key,
+                                    "worklog_comment": worklog_comment,
+                                    "duration_minutes": duration_minutes,
+                                    "status": "dry_run",
+                                }
+                            )
+                        else:
+                            # No changes, entry already synced
+                            logger.debug(f"{mode}No changes for {issue_key}, would skip")
+                        continue
 
                     if has_changes:
                         # Data changed - perform UPDATE
@@ -459,8 +563,10 @@ class Syncer:
                 )
 
         # Save mappings after Phase 1 (batch write optimization)
-        logger.debug("Saving mappings after Phase 1...")
-        self.mapping.save()
+        # Skip saving in dry-run mode (no actual changes were made)
+        if not dry_run:
+            logger.debug("Saving mappings after Phase 1...")
+            self.mapping.save()
 
         # Phase 2: DELETE (Overhang cleanup)
         # IMPORTANT: Only delete entries that are WITHIN the sync window but no longer
@@ -468,7 +574,33 @@ class Syncer:
         # are simply not returned by Tempo's date-filtered API, not actually deleted.
         sync_window_start = from_date.strftime("%Y-%m-%d")
 
-        for tempo_id, mapping in self.mapping.get_unprocessed_mappings():
+        # Pre-count deletions within sync window for limit check
+        unprocessed = self.mapping.get_unprocessed_mappings()
+        deletions_in_window = [
+            (tempo_id, m)
+            for tempo_id, m in unprocessed
+            if (m.get("last_date", "")[:10] or "") >= sync_window_start
+        ]
+
+        if len(deletions_in_window) > max_deletes:
+            logger.error(
+                f"DELETE limit exceeded: {len(deletions_in_window)} > {max_deletes} "
+                f"(use dry_run=True to preview, or increase limit)"
+            )
+            return {
+                "success": False,
+                "error": "delete_limit_exceeded",
+                "message": f"Would delete {len(deletions_in_window)} entries, but limit is {max_deletes}",
+                "created": created,
+                "updated": updated,
+                "deleted": 0,
+                "failed": failed,
+                "total": len(worklogs),
+                "actions": actions,
+                "timestamp": datetime.now().isoformat(),
+            }
+
+        for tempo_id, mapping in unprocessed:
             try:
                 entry_id = mapping.get("solidtime_entry_id")
                 issue_key = mapping.get("issue_key", "UNKNOWN")
@@ -487,6 +619,20 @@ class Syncer:
                     )
                     # Mark as processed to avoid repeated checks, but don't delete
                     self.mapping.mark_processed(tempo_id)
+                    continue
+
+                if dry_run:
+                    # Dry-run: only log, no actual API call
+                    logger.info(f"{mode}Would DELETE: {issue_key} ({worklog_date})")
+                    deleted += 1
+                    actions.append(
+                        {
+                            "action": "DELETE",
+                            "issue_key": issue_key,
+                            "status": "dry_run",
+                            "reason": "Worklog deleted from Tempo",
+                        }
+                    )
                     continue
 
                 if entry_id and self.solidtime_client.delete_time_entry(entry_id):
@@ -517,17 +663,27 @@ class Syncer:
                 failed += 1
 
         # Save mappings after Phase 2 (batch write optimization)
-        logger.debug("Saving mappings after Phase 2...")
-        self.mapping.save()
+        # Skip saving in dry-run mode (no actual changes were made)
+        if not dry_run:
+            logger.debug("Saving mappings after Phase 2...")
+            self.mapping.save()
 
         duration = (datetime.now() - start_time).total_seconds()
-        logger.info(
-            f"Sync complete: created={created}, updated={updated}, deleted={deleted}, "
-            f"failed={failed} ({duration:.1f}s)"
-        )
+
+        if dry_run:
+            logger.info(
+                f"{mode}Summary: would CREATE={created}, UPDATE={updated}, DELETE={deleted} "
+                f"({duration:.1f}s) - NO CHANGES MADE"
+            )
+        else:
+            logger.info(
+                f"Sync complete: created={created}, updated={updated}, deleted={deleted}, "
+                f"failed={failed} ({duration:.1f}s)"
+            )
 
         return {
             "success": True,
+            "dry_run": dry_run,
             "created": created,
             "updated": updated,
             "deleted": deleted,

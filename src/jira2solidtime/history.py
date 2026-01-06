@@ -26,6 +26,9 @@ class History:
     def _init_db(self) -> None:
         """Initialize database schema."""
         with sqlite3.connect(self.db_path) as conn:
+            # Enable WAL mode for crash safety
+            conn.execute("PRAGMA journal_mode=WAL")
+
             conn.execute(
                 """
                 CREATE TABLE IF NOT EXISTS syncs (
@@ -43,6 +46,24 @@ class History:
                 )
                 """
             )
+
+            # Worklog mappings table (Tempo ID -> Solidtime ID)
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS worklog_mappings (
+                    tempo_worklog_id TEXT PRIMARY KEY,
+                    solidtime_entry_id TEXT NOT NULL,
+                    issue_key TEXT,
+                    last_duration INTEGER,
+                    last_description TEXT,
+                    last_date TEXT,
+                    created_at TEXT,
+                    last_check TEXT,
+                    processed INTEGER DEFAULT 0
+                )
+                """
+            )
+
             conn.commit()
             logger.debug(f"Initialized history database at {self.db_path}")
 
