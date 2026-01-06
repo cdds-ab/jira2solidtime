@@ -463,10 +463,31 @@ class Syncer:
         self.mapping.save()
 
         # Phase 2: DELETE (Overhang cleanup)
+        # IMPORTANT: Only delete entries that are WITHIN the sync window but no longer
+        # exist in Tempo. Entries outside the sync window should be preserved - they
+        # are simply not returned by Tempo's date-filtered API, not actually deleted.
+        sync_window_start = from_date.strftime("%Y-%m-%d")
+
         for tempo_id, mapping in self.mapping.get_unprocessed_mappings():
             try:
                 entry_id = mapping.get("solidtime_entry_id")
                 issue_key = mapping.get("issue_key", "UNKNOWN")
+                last_date = mapping.get("last_date", "")
+
+                # Extract date part from ISO timestamp (e.g., "2025-12-15T00:00:00Z" -> "2025-12-15")
+                worklog_date = last_date[:10] if last_date else ""
+
+                # Only delete if the worklog date is within the sync window
+                # If the date is older than from_date, the worklog simply wasn't returned
+                # by Tempo's API due to the date filter - it wasn't actually deleted
+                if worklog_date and worklog_date < sync_window_start:
+                    logger.debug(
+                        f"Skipping delete for {issue_key} ({worklog_date}) - "
+                        f"outside sync window (starts {sync_window_start})"
+                    )
+                    # Mark as processed to avoid repeated checks, but don't delete
+                    self.mapping.mark_processed(tempo_id)
+                    continue
 
                 if entry_id and self.solidtime_client.delete_time_entry(entry_id):
                     deleted += 1
