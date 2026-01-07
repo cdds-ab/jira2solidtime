@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.3.0](https://github.com/cdds-ab/jira2solidtime/compare/v0.2.0...v0.3.0) (2026-01-07)
+
+
+### Features
+
+* add sync stability improvements ([54ab393](https://github.com/cdds-ab/jira2solidtime/commit/54ab393d86a6d9ea74b8dd500cdb8a6b2a64b564))
+* **ui:** simplify dashboard to show only syncs with changes ([4a2900f](https://github.com/cdds-ab/jira2solidtime/commit/4a2900fa046db08e6bb913c8ebdd77599778cf7d))
+
+
+### Bug Fixes
+
+* mark existing entries as processed in dry-run mode ([b6806e9](https://github.com/cdds-ab/jira2solidtime/commit/b6806e9de04803538dc4f5e838c71d2f0af11b52))
+* prevent deletion of worklogs outside sync window ([5cf79bc](https://github.com/cdds-ab/jira2solidtime/commit/5cf79bc400348300f85f7bd9133f130c6d21c0be))
+
+
+### Documentation
+
+* update all documentation for v0.2.0 release ([32c1dbd](https://github.com/cdds-ab/jira2solidtime/commit/32c1dbd81de74e8b9159b56873ce0f030452edda))
+
 ## [0.2.0](https://github.com/cdds-ab/jira2solidtime/compare/v0.1.0...v0.2.0) (2025-11-03)
 
 
