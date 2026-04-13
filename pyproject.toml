@@ -6,7 +6,7 @@ authors = [
     {name = "Fred Thiele", email = "fred.thiele@cdds.se"},
 ]
 dependencies = [
-    "requests>=2.31.0",
+    "requests>=2.33.1",
     "apscheduler>=3.10.4",
     "flask>=3.0.0",
 ]
