@@ -7,7 +7,7 @@ authors = [
 ]
 dependencies = [
     "requests>=2.31.0",
-    "apscheduler>=3.10.4",
+    "apscheduler>=3.11.2",
     "flask>=3.0.0",
 ]
 requires-python = ">=3.11"
