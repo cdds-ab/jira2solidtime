@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.3.1](https://github.com/cdds-ab/jira2solidtime/compare/v0.3.0...v0.3.1) (2026-04-21)
+
+
+### Dependencies
+
+* **deps-dev:** update types-requests requirement ([#42](https://github.com/cdds-ab/jira2solidtime/issues/42)) ([a634773](https://github.com/cdds-ab/jira2solidtime/commit/a6347734387029f8e6fa0eb4737a5f08a154a3af))
+* **deps:** update flask requirement from &gt;=3.0.0 to &gt;=3.1.3 ([#41](https://github.com/cdds-ab/jira2solidtime/issues/41)) ([54ecf3d](https://github.com/cdds-ab/jira2solidtime/commit/54ecf3dbe534c939e7091fbd3c557b4f4ce387e8))
+
 ## [0.3.0](https://github.com/cdds-ab/jira2solidtime/compare/v0.2.0...v0.3.0) (2026-01-07)
 
 
